@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+#
+python-dotenv
+pydantic
+pydantic-settings
+#
+numpy
+requests
+httpx             # 用于异步HTTP请求

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neotask"
+version = "0.1.0"
+description = "轻量级 Python 任务队列管理器，无需额外服务"
+authors = [{name = "Haeng", email = "helpenx@gmail.com"}]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["task", "queue", "async", "job", "scheduler", "pentask"]
+
+dependencies = ["filelock>=3.12.0"]
+
+[project.optional-dependencies]
+ui = ["fastapi>=0.100.0", "uvicorn>=0.23.0"]
+dev = ["pytest>=7.0.0", "black>=23.0.0"]
+
+[project.scripts]
+pentask = "pentask.cli:main"
+pentask-ui = "pentask.cli:ui"
+
+[project.urls]
+Homepage = "https://github.com/neopen/task-queue-manager"
+Repository = "https://github.com/neopen/task-queue-manager"
+Documentation = "https://github.com/neopen/task-queue-manager#README"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["pentask*"]
+
+[dependency-groups]
+dev = [
+    "build>=1.2.2.post1",
+]
