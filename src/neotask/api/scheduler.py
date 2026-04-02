@@ -4,22 +4,23 @@
 @Author: HiPeng
 @Time: 2026/4/1 18:16
 """
+from datetime import datetime, timezone
+
+"""Main scheduler facade using Facade pattern."""
 
 import asyncio
 import threading
 import uuid
-from datetime import timezone, datetime
 from typing import Optional, Any, Dict, Callable, Union
-
-from neotask.core.future import FutureManager
-from neotask.core.queue import PriorityQueue
-from neotask.core.worker import WorkerPool
-from neotask.executors.base import TaskExecutor
 from neotask.models.config import SchedulerConfig
 from neotask.models.task import Task, TaskPriority, TaskStatus
-from neotask.monitor.event_bus import EventBus, TaskEvent
 from neotask.storage.memory import MemoryTaskRepository, MemoryQueueRepository
 from neotask.storage.redis import RedisTaskRepository, RedisQueueRepository
+from neotask.core.queue import PriorityQueue
+from neotask.core.worker import WorkerPool
+from neotask.core.future import FutureManager
+from neotask.monitor.event_bus import EventBus, TaskEvent
+from neotask.executors.base import TaskExecutor
 from neotask.web.server import WebUIServer
 
 
@@ -140,8 +141,6 @@ class TaskScheduler:
 
     # ========== Task Waiting ==========
 
-    # ========== Task Waiting ==========
-
     def wait_for_result(self, task_id: str, timeout: float = 300) -> Dict[str, Any]:
         """Wait for task completion synchronously.
 
@@ -207,7 +206,6 @@ class TaskScheduler:
             task_status = TaskStatus(status)
             tasks = self._run_async(self._task_repo.list_by_status(task_status, limit))
         else:
-            # Get from queue and processing
             tasks = []
         return [t.to_dict() for t in tasks]
 
