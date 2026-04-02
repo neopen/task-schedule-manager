@@ -40,6 +40,11 @@ class MemoryTaskRepository(TaskRepository):
             if task_id in self._tasks:
                 self._tasks[task_id].status = status
 
+    async def exists(self, task_id: str) -> bool:
+        """Check if task exists."""
+        async with self._lock:
+            return task_id in self._tasks
+
 
 class MemoryQueueRepository(QueueRepository):
     """In-memory priority queue repository."""
@@ -70,3 +75,14 @@ class MemoryQueueRepository(QueueRepository):
     async def size(self) -> int:
         async with self._lock:
             return len(self._queue)
+
+    async def peek(self, count: int = 1) -> List[str]:
+        """Peek at top tasks without removing."""
+        async with self._lock:
+            sorted_queue = sorted(self._queue)
+            return [tid for _, tid in sorted_queue[:count]]
+
+    async def clear(self) -> None:
+        """Clear all tasks from queue."""
+        async with self._lock:
+            self._queue.clear()

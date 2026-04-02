@@ -4,12 +4,9 @@
 @Author: HiPeng
 @Time: 2026/3/27 23:55
 """
-"""Redis storage implementation."""
 
 from typing import List, Optional
-
 import redis.asyncio as redis
-
 from neotask.models.task import Task, TaskStatus
 from neotask.storage.base import TaskRepository, QueueRepository
 
@@ -55,6 +52,11 @@ class RedisTaskRepository(TaskRepository):
         key = f"task:{task_id}"
         await self._client.hset(key, "status", status.value)
 
+    async def exists(self, task_id: str) -> bool:
+        """Check if task exists."""
+        key = f"task:{task_id}"
+        return await self._client.exists(key) > 0
+
     async def close(self) -> None:
         """Close Redis connection."""
         await self._client.close()
@@ -94,6 +96,10 @@ class RedisQueueRepository(QueueRepository):
     async def peek(self, count: int = 1) -> List[str]:
         """Peek at top tasks without removing."""
         return await self._client.zrange(self._queue_key, 0, count - 1)
+
+    async def clear(self) -> None:
+        """Clear all tasks from queue."""
+        await self._client.delete(self._queue_key)
 
     async def close(self) -> None:
         """Close Redis connection."""

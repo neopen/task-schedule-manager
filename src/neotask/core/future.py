@@ -85,3 +85,11 @@ class FutureManager:
         """Remove a future."""
         async with self._lock:
             self._futures.pop(task_id, None)
+
+    async def cancel_all(self) -> None:
+        """Cancel all pending futures."""
+        async with self._lock:
+            for task_id, future in self._futures.items():
+                if not future.is_completed:
+                    future.set_error("Scheduler shutting down")
+            self._futures.clear()

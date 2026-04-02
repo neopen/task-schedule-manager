@@ -14,6 +14,7 @@ temp/
 .pypirc
 bin/
 .settings/
+.pytest_cache/
 __pycache__/
 .classpath
 .factorypath

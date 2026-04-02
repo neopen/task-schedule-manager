@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 
-class DistributedLock(ABC):
+class BackLock(ABC):
     """Abstract distributed lock."""
 
     @abstractmethod

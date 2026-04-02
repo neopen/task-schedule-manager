@@ -110,6 +110,29 @@ class WebUIConfig:
 
 
 @dataclass
+class ExecutorConfig:
+    """Executor configuration."""
+
+    type: str = "async"  # async, thread, process, class, auto
+    max_workers: Optional[int] = None
+
+    @classmethod
+    def async_executor(cls) -> "ExecutorConfig":
+        """Create async executor config."""
+        return cls(type="async")
+
+    @classmethod
+    def thread_executor(cls, max_workers: int = 10) -> "ExecutorConfig":
+        """Create thread executor config."""
+        return cls(type="thread", max_workers=max_workers)
+
+    @classmethod
+    def process_executor(cls, max_workers: int = None) -> "ExecutorConfig":
+        """Create process executor config."""
+        return cls(type="process", max_workers=max_workers)
+
+
+@dataclass
 class SchedulerConfig:
     """Main scheduler configuration."""
 
@@ -118,6 +141,7 @@ class SchedulerConfig:
     lock: LockConfig = field(default_factory=LockConfig.memory)
     worker: WorkerConfig = field(default_factory=WorkerConfig.default)
     queue: QueueConfig = field(default_factory=QueueConfig.default)
+    executor: ExecutorConfig = field(default_factory=ExecutorConfig.async_executor)
     webui: WebUIConfig = field(default_factory=WebUIConfig.disabled)
 
     def __post_init__(self):

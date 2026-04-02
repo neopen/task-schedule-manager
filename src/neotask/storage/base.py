@@ -38,6 +38,11 @@ class TaskRepository(ABC):
         """Update task status."""
         pass
 
+    @abstractmethod
+    async def exists(self, task_id: str) -> bool:
+        """Check if task exists."""
+        pass
+
 
 class QueueRepository(ABC):
     """Repository interface for task queue."""
@@ -60,4 +65,14 @@ class QueueRepository(ABC):
     @abstractmethod
     async def size(self) -> int:
         """Get queue size."""
+        pass
+
+    @abstractmethod
+    async def peek(self, count: int = 1) -> List[str]:
+        """Peek at top tasks without removing."""
+        pass
+
+    @abstractmethod
+    async def clear(self) -> None:
+        """Clear all tasks from queue."""
         pass

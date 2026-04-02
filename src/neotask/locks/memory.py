@@ -7,10 +7,10 @@
 
 import asyncio
 from typing import Dict
-from neotask.locks.base import DistributedLock
+from neotask.locks.base import BackLock
 
 
-class MemoryLock(DistributedLock):
+class MemoryLock(BackLock):
     """In-memory distributed lock (for single node)."""
 
     def __init__(self):

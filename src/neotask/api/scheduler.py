@@ -6,6 +6,9 @@
 """
 from datetime import datetime, timezone
 
+from neotask.executors import ExecutorFactory
+from neotask.storage import StorageFactory
+
 """Main scheduler facade using Facade pattern."""
 
 import asyncio
@@ -14,8 +17,6 @@ import uuid
 from typing import Optional, Any, Dict, Callable, Union
 from neotask.models.config import SchedulerConfig
 from neotask.models.task import Task, TaskPriority, TaskStatus
-from neotask.storage.memory import MemoryTaskRepository, MemoryQueueRepository
-from neotask.storage.redis import RedisTaskRepository, RedisQueueRepository
 from neotask.core.queue import PriorityQueue
 from neotask.core.worker import WorkerPool
 from neotask.core.future import FutureManager
@@ -33,6 +34,12 @@ class TaskScheduler:
 
         # Initialize storage based on config
         self._task_repo, self._queue_repo = self._create_storage()
+
+        # Create executor using factory
+        self._executor = ExecutorFactory.create(
+            executor,
+            self._config.executor.type
+        )
 
         # Initialize components
         self._queue = PriorityQueue(self._queue_repo, self._config.queue.max_size)
@@ -72,22 +79,7 @@ class TaskScheduler:
 
     def _create_storage(self):
         """Create storage repositories based on config."""
-        storage_type = self._config.storage.type
-
-        if storage_type == "memory":
-            return MemoryTaskRepository(), MemoryQueueRepository()
-
-        elif storage_type == "redis":
-            redis_url = self._config.storage.redis_url
-            if not redis_url:
-                raise ValueError("Redis URL is required for Redis storage")
-            return (
-                RedisTaskRepository(redis_url),
-                RedisQueueRepository(redis_url)
-            )
-
-        else:
-            raise ValueError(f"Unsupported storage type: {storage_type}")
+        return StorageFactory.create(self._config.storage)
 
     def _run_loop(self) -> None:
         """Run asyncio event loop in background thread."""
@@ -239,15 +231,28 @@ class TaskScheduler:
 
     def shutdown(self) -> None:
         """Shutdown scheduler gracefully."""
+        import asyncio
+
         # Stop web UI
         if self._webui:
             self._webui.stop()
 
-        # Stop worker pool
-        self._run_async(self._worker_pool.stop())
+        # Stop worker pool - this needs to be done in the event loop
+        future = asyncio.run_coroutine_threadsafe(self._worker_pool.stop(), self._loop)
+        try:
+            future.result(timeout=10)
+        except Exception as e:
+            print(f"Error during worker shutdown: {e}")
+
+        # Cancel all pending futures
+        self._run_async(self._future_manager.cancel_all())
 
         # Stop event loop
         self._loop.call_soon_threadsafe(self._loop.stop)
+
+        # Wait for thread to finish
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=5)
 
     # ========== Event Callbacks ==========
 
