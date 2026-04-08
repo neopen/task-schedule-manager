@@ -28,8 +28,17 @@ class StorageFactory:
     """
 
     @staticmethod
-    def create_storage(storage_type: str, sqlite_path: str, redis_url: Optional[str]):
-        """初始化存储。"""
+    def create_storage(storage_type: str, sqlite_path: str, redis_url: Optional[str]) -> Tuple[TaskRepository, QueueRepository]:
+        """初始化存储。
+
+        Args:
+            storage_type: 存储类型 ("memory", "sqlite", "redis")
+            sqlite_path: SQLite 数据库路径
+            redis_url: Redis 连接 URL
+
+        Returns:
+            Tuple of (TaskRepository, QueueRepository)
+        """
         from neotask.models.config import StorageConfig
 
         if storage_type == "memory":

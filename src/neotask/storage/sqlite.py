@@ -18,31 +18,43 @@ class SQLiteTaskRepository(TaskRepository):
 
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = db_path or "tasks.db"
+        self._initialized = False
         self._init_db()
 
-    def _init_db(self) -> None:
-        """Initialize database tables."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+    async def _ensure_init(self) -> None:
+        """Ensure database is initialized."""
+        if not self._initialized:
+            await self._init_db()
+            self._initialized = True
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tasks (
-                task_id TEXT PRIMARY KEY,
-                data TEXT NOT NULL,
-                status TEXT NOT NULL,
-                priority INTEGER NOT NULL,
-                node_id TEXT NOT NULL,
-                retry_count INTEGER NOT NULL,
-                created_at TEXT NOT NULL,
-                started_at TEXT,
-                completed_at TEXT,
-                result TEXT,
-                error TEXT
-            )
-        """)
-
-        conn.commit()
-        conn.close()
+    async def _init_db(self) -> None:
+        """Initialize database tables asynchronously."""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    task_id TEXT PRIMARY KEY,
+                    data TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    priority INTEGER NOT NULL,
+                    node_id TEXT NOT NULL,
+                    retry_count INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    result TEXT,
+                    error TEXT
+                )
+            """)
+            # Create index for faster queries
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tasks_status 
+                ON tasks(status)
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_tasks_priority 
+                ON tasks(priority)
+            """)
+            await db.commit()
 
     async def save(self, task: Task) -> None:
         async with aiosqlite.connect(self.db_path) as db:
