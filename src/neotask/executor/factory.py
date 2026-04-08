@@ -8,11 +8,11 @@
 import inspect
 from typing import Any, Callable, Dict
 
-from neotask.executors.async_executor import AsyncExecutor
-from neotask.executors.base import TaskExecutor, CallbackExecutor
-from neotask.executors.class_executor import ClassExecutor
-from neotask.executors.process_executor import ProcessExecutor
-from neotask.executors.thread_executor import ThreadExecutor
+from neotask.executor.async_executor import AsyncExecutor
+from neotask.executor.base import TaskExecutor, CallbackExecutor
+from neotask.executor.class_executor import ClassExecutor
+from neotask.executor.process_executor import ProcessExecutor
+from neotask.executor.thread_executor import ThreadExecutor
 
 
 class ExecutorType:
@@ -27,7 +27,7 @@ class ExecutorType:
 
 
 class ExecutorFactory:
-    """Factory for creating task executors."""
+    """Factory for creating task executor."""
 
     @staticmethod
     def create(executor: Any,
@@ -38,7 +38,7 @@ class ExecutorFactory:
         Args:
             executor: Function, class instance, or TaskExecutor
             executor_type: Type of executor to create
-            **kwargs: Additional arguments for specific executors
+            **kwargs: Additional arguments for specific executor
 
         Returns:
             TaskExecutor instance

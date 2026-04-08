@@ -7,10 +7,10 @@
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from neotask.locks.base import TaskLock
-from neotask.locks.memory import MemoryLock
-from neotask.locks.redis import RedisLock
-from neotask.locks.watchdog import WatchDog
+from neotask.lock.base import TaskLock
+from neotask.lock.memory import MemoryLock
+from neotask.lock.redis import RedisLock
+from neotask.lock.watchdog import WatchDog
 
 
 class LockType:

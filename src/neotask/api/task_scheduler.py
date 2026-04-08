@@ -2,175 +2,464 @@
 @FileName: task_scheduler.py
 @Description: TaskScheduler - 定时任务入口，专注于延时/周期任务。
 @Author: HiPeng
-@Time: 2026/4/1 18:16
+@Time: 2026/4/8 00:00
 """
-from datetime import datetime
-from typing import Optional, Any, Dict, Callable, Union
 
-from neotask.api.task_pool import TaskPool
-from neotask.executors.base import TaskExecutor
-from neotask.models.config import SchedulerConfig
+import asyncio
+import uuid
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from typing import Optional, Any, Dict, List, Callable, Union
+
+from neotask.executor.base import TaskExecutor
+
+from neotask.api.task_pool import TaskPool, TaskPoolConfig
 from neotask.models.task import TaskPriority
 
 
-class TaskScheduler:
-    """定时任务调度器 - 管理延时任务和周期任务。
+@dataclass
+class PeriodicTask:
+    """周期任务定义"""
+    task_id: str
+    data: Dict[str, Any]
+    interval_seconds: int
+    priority: int
+    cron_expr: Optional[str] = None
+    next_run: Optional[datetime] = None
+    last_run: Optional[datetime] = None
+    run_count: int = 0
+    is_paused: bool = False
+    created_at: datetime = field(default_factory=datetime.now)
 
-    职责：
-    - 延时执行（delay_seconds / execute_at）
-    - 周期执行（interval / cron）
-    - 定时任务的管理（取消、暂停、恢复）
+
+@dataclass
+class SchedulerConfig:
+    """调度器配置"""
+    storage_type: str = "memory"
+    sqlite_path: str = "neotask.db"
+    redis_url: Optional[str] = None
+    worker_concurrency: int = 10
+    max_retries: int = 3
+    retry_delay: float = 1.0
+    enable_persistence: bool = False
+
+
+class TaskScheduler:
+    """定时任务调度器
+
+    支持延时执行、周期执行和Cron表达式。
 
     使用示例：
-        >>> class MyExecutor(TaskExecutor): pass
-        >>> scheduler = TaskScheduler(executor=MyExecutor())
+        >>> scheduler = TaskScheduler()
         >>>
         >>> # 延时执行
-        >>> scheduler.submit_delayed({"data": "value"}, delay_seconds=60)
+        >>> task_id = scheduler.submit_delayed({"data": "value"}, delay_seconds=60)
         >>>
         >>> # 周期执行
-        >>> scheduler.submit_interval({"data": "value"}, interval_seconds=300)
+        >>> task_id = scheduler.submit_interval({"data": "value"}, interval_seconds=300)
         >>>
-        >>> # Cron 表达式
-        >>> scheduler.submit_cron({"data": "value"}, "0 9 * * *")
+        >>> # Cron表达式
+        >>> task_id = scheduler.submit_cron({"data": "value"}, "0 9 * * *")
+        >>>
+        >>> # 取消周期任务
+        >>> scheduler.cancel_periodic(task_id)
     """
 
-    def __init__(self, executor: TaskExecutor, config: Optional[SchedulerConfig] = None):
+    def __init__(
+            self,
+            executor: Optional[Union[TaskExecutor, Callable]] = None,
+            config: Optional[SchedulerConfig] = None
+    ):
         self._config = config or SchedulerConfig()
-        self._executor = executor
 
-        # TODO: 实现定时任务存储和调度逻辑
-        # 当前版本使用 TaskPool 作为底层，后续扩展定时能力
+        # 创建底层任务池
+        pool_config = TaskPoolConfig(
+            storage_type=self._config.storage_type,
+            sqlite_path=self._config.sqlite_path,
+            redis_url=self._config.redis_url,
+            worker_concurrency=self._config.worker_concurrency,
+            max_retries=self._config.max_retries,
+            retry_delay=self._config.retry_delay
+        )
+        self._pool = TaskPool(executor, pool_config)
 
-        # 临时：使用即时任务池作为底层
-        self._pool = TaskPool(executor, config)
+        # 周期任务存储
+        self._periodic_tasks: Dict[str, PeriodicTask] = {}
+        self._scheduler_task: Optional[asyncio.Task] = None
+        self._running = False
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def _get_loop(self) -> asyncio.AbstractEventLoop:
+        """获取事件循环"""
+        if self._loop is None or self._loop.is_closed():
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+        return self._loop
+
+    def _run_coroutine(self, coro):
+        """运行协程"""
+        loop = self._get_loop()
+        if loop.is_running():
+            return asyncio.create_task(coro)
+        else:
+            return loop.run_until_complete(coro)
+
+    # ========== 生命周期 ==========
+
+    def start(self) -> None:
+        """启动调度器"""
+        self._pool.start()
+
+        if self._running:
+            return
+
+        self._running = True
+        loop = self._get_loop()
+
+        # 加载持久化的周期任务
+        if self._config.enable_persistence:
+            self._load_periodic_tasks()
+
+        # 启动调度循环
+        self._scheduler_task = loop.create_task(self._scheduler_loop())
+
+    def shutdown(self, graceful: bool = True, timeout: float = 30) -> None:
+        """关闭调度器"""
+        self._running = False
+
+        if self._scheduler_task:
+            self._scheduler_task.cancel()
+
+        self._pool.shutdown(graceful, timeout)
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.shutdown()
 
     # ========== 延时任务 ==========
 
-    def submit_delayed(self, data: Dict[str, Any],
-                       delay_seconds: int,
-                       priority: Union[int, TaskPriority] = TaskPriority.NORMAL) -> str:
-        """延时执行任务。
+    def submit_delayed(
+            self,
+            data: Dict[str, Any],
+            delay_seconds: float,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL
+    ) -> str:
+        """延时执行任务
 
         Args:
             data: 任务数据
             delay_seconds: 延迟秒数
+            task_id: 任务ID（可选）
             priority: 优先级
 
         Returns:
             task_id
         """
-        # TODO: 实现真正的延时任务
-        # 当前版本直接执行
-        return self._pool.submit(data, priority)
+        return self._pool.submit(data, task_id, priority, delay_seconds)
 
-    def submit_at(self, data: Dict[str, Any],
-                  execute_at: datetime,
-                  priority: Union[int, TaskPriority] = TaskPriority.NORMAL) -> str:
-        """指定时间点执行任务。
+    async def submit_delayed_async(
+            self,
+            data: Dict[str, Any],
+            delay_seconds: float,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL
+    ) -> str:
+        """延时执行任务（异步）"""
+        return await self._pool.submit_async(data, task_id, priority, delay_seconds)
+
+    def submit_at(
+            self,
+            data: Dict[str, Any],
+            execute_at: datetime,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL
+    ) -> str:
+        """指定时间点执行任务
 
         Args:
             data: 任务数据
             execute_at: 执行时间点
+            task_id: 任务ID（可选）
             priority: 优先级
 
         Returns:
             task_id
         """
         delay_seconds = max(0.0, (execute_at - datetime.now()).total_seconds())
-        return self.submit_delayed(data, int(delay_seconds), priority)
+        return self.submit_delayed(data, delay_seconds, task_id, priority)
 
     # ========== 周期任务 ==========
 
-    def submit_interval(self, data: Dict[str, Any],
-                        interval_seconds: int,
-                        priority: Union[int, TaskPriority] = TaskPriority.NORMAL) -> str:
-        """按固定间隔周期执行任务。
+    def submit_interval(
+            self,
+            data: Dict[str, Any],
+            interval_seconds: int,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL
+    ) -> str:
+        """按固定间隔周期执行任务
 
         Args:
             data: 任务数据
             interval_seconds: 执行间隔（秒）
+            task_id: 任务ID（可选）
             priority: 优先级
 
         Returns:
             task_id
         """
-        # TODO: 实现周期任务
-        raise NotImplementedError("Periodic tasks will be available in v0.2.0")
+        task_id = task_id or self._generate_task_id()
 
-    def submit_cron(self, data: Dict[str, Any],
-                    cron_expr: str,
-                    priority: Union[int, TaskPriority] = TaskPriority.NORMAL) -> str:
-        """按 Cron 表达式周期执行任务。
+        periodic_task = PeriodicTask(
+            task_id=task_id,
+            data=data,
+            interval_seconds=interval_seconds,
+            priority=priority.value if isinstance(priority, TaskPriority) else priority,
+            next_run=datetime.now()
+        )
+
+        self._periodic_tasks[task_id] = periodic_task
+
+        # 立即执行第一次
+        self._pool.submit(data, task_id, priority)
+
+        # 持久化
+        if self._config.enable_persistence:
+            self._save_periodic_task(periodic_task)
+
+        return task_id
+
+    def submit_cron(
+            self,
+            data: Dict[str, Any],
+            cron_expr: str,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL
+    ) -> str:
+        """按Cron表达式周期执行任务
 
         Args:
             data: 任务数据
-            cron_expr: Cron 表达式，如 "0 9 * * *" 表示每天9点
+            cron_expr: Cron表达式，如 "0 9 * * *" 表示每天9点
+            task_id: 任务ID（可选）
             priority: 优先级
 
         Returns:
             task_id
         """
-        # TODO: 实现 Cron 周期任务
-        raise NotImplementedError("Cron tasks will be available in v0.2.0")
+        # 尝试解析Cron表达式
+        next_run = self._parse_cron(cron_expr)
 
-    # ========== 定时任务管理 ==========
+        task_id = task_id or self._generate_task_id()
+
+        periodic_task = PeriodicTask(
+            task_id=task_id,
+            data=data,
+            interval_seconds=0,
+            priority=priority.value if isinstance(priority, TaskPriority) else priority,
+            cron_expr=cron_expr,
+            next_run=next_run
+        )
+
+        self._periodic_tasks[task_id] = periodic_task
+
+        # 持久化
+        if self._config.enable_persistence:
+            self._save_periodic_task(periodic_task)
+
+        return task_id
+
+    def _parse_cron(self, cron_expr: str) -> datetime:
+        """解析Cron表达式，返回下次执行时间
+
+        简化实现，仅支持基本格式。
+        生产环境建议使用 croniter 库。
+        """
+        parts = cron_expr.split()
+        if len(parts) != 5:
+            raise ValueError(f"Invalid cron expression: {cron_expr}")
+
+        # 简化实现：每分钟执行
+        # TODO: 集成 croniter 库实现完整Cron支持
+        now = datetime.now()
+        return now + timedelta(minutes=1)
 
     def cancel_periodic(self, task_id: str) -> bool:
-        """取消周期任务。"""
-        # TODO: 实现周期任务取消
-        raise NotImplementedError("Periodic task cancellation will be available in v0.2.0")
+        """取消周期任务"""
+        if task_id in self._periodic_tasks:
+            del self._periodic_tasks[task_id]
+
+            if self._config.enable_persistence:
+                self._delete_periodic_task(task_id)
+
+            return True
+        return False
 
     def pause_periodic(self, task_id: str) -> bool:
-        """暂停周期任务。"""
-        # TODO: 实现周期任务暂停
-        raise NotImplementedError("Periodic task pause will be available in v0.2.0")
+        """暂停周期任务"""
+        if task_id in self._periodic_tasks:
+            self._periodic_tasks[task_id].is_paused = True
+            return True
+        return False
 
     def resume_periodic(self, task_id: str) -> bool:
-        """恢复周期任务。"""
-        # TODO: 实现周期任务恢复
-        raise NotImplementedError("Periodic task resume will be available in v0.2.0")
+        """恢复周期任务"""
+        if task_id in self._periodic_tasks:
+            self._periodic_tasks[task_id].is_paused = False
+            self._periodic_tasks[task_id].next_run = datetime.now()
+            return True
+        return False
+
+    def get_periodic_tasks(self) -> List[Dict[str, Any]]:
+        """获取所有周期任务"""
+        return [
+            {
+                "task_id": task.task_id,
+                "interval_seconds": task.interval_seconds,
+                "cron_expr": task.cron_expr,
+                "next_run": task.next_run.isoformat() if task.next_run else None,
+                "run_count": task.run_count,
+                "is_paused": task.is_paused
+            }
+            for task in self._periodic_tasks.values()
+        ]
+
+    # ========== 调度循环 ==========
+
+    async def _scheduler_loop(self) -> None:
+        """调度循环 - 处理周期任务"""
+        while self._running:
+            try:
+                now = datetime.now()
+
+                for task_id, periodic_task in list(self._periodic_tasks.items()):
+                    if periodic_task.is_paused:
+                        continue
+
+                    if periodic_task.next_run and periodic_task.next_run <= now:
+                        # 执行周期任务
+                        await self._pool.submit_async(
+                            periodic_task.data,
+                            task_id,
+                            periodic_task.priority
+                        )
+
+                        # 更新下次执行时间
+                        periodic_task.last_run = now
+                        periodic_task.run_count += 1
+
+                        if periodic_task.cron_expr:
+                            periodic_task.next_run = self._parse_cron(periodic_task.cron_expr)
+                        else:
+                            periodic_task.next_run = now + timedelta(
+                                seconds=periodic_task.interval_seconds
+                            )
+
+                        # 持久化更新
+                        if self._config.enable_persistence:
+                            self._save_periodic_task(periodic_task)
+
+                await asyncio.sleep(1)
+
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(5)
+
+    # ========== 持久化 ==========
+
+    def _save_periodic_task(self, task: PeriodicTask) -> None:
+        """保存周期任务到存储"""
+        # TODO: 实现持久化
+        pass
+
+    def _load_periodic_tasks(self) -> None:
+        """从存储加载周期任务"""
+        # TODO: 实现加载
+        pass
+
+    def _delete_periodic_task(self, task_id: str) -> None:
+        """删除周期任务"""
+        # TODO: 实现删除
+        pass
+
+    def _generate_task_id(self) -> str:
+        """生成任务ID"""
+        return f"PRD_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
     # ========== 委托给 TaskPool 的方法 ==========
 
-    def wait_for_result(self, task_id: str, timeout: float = 300) -> Dict[str, Any]:
-        """等待任务完成。"""
+    def wait_for_result(self, task_id: str, timeout: float = 300) -> Any:
+        """等待任务完成"""
         return self._pool.wait_for_result(task_id, timeout)
 
-    async def wait_for_result_async(self, task_id: str, timeout: float = 300) -> Dict[str, Any]:
-        """异步等待任务完成。"""
+    async def wait_for_result_async(self, task_id: str, timeout: float = 300) -> Any:
+        """等待任务完成（异步）"""
         return await self._pool.wait_for_result_async(task_id, timeout)
 
     def get_status(self, task_id: str) -> Optional[str]:
-        """获取任务状态。"""
+        """获取任务状态"""
         return self._pool.get_status(task_id)
 
+    async def get_status_async(self, task_id: str) -> Optional[str]:
+        """获取任务状态（异步）"""
+        return await self._pool.get_status_async(task_id)
+
     def get_result(self, task_id: str) -> Optional[Dict[str, Any]]:
-        """获取任务结果。"""
+        """获取任务结果"""
         return self._pool.get_result(task_id)
 
+    async def get_result_async(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """获取任务结果（异步）"""
+        return await self._pool.get_result_async(task_id)
+
     def cancel(self, task_id: str) -> bool:
-        """取消任务。"""
+        """取消任务"""
         return self._pool.cancel(task_id)
 
+    async def cancel_async(self, task_id: str) -> bool:
+        """取消任务（异步）"""
+        return await self._pool.cancel_async(task_id)
+
     def get_stats(self) -> Dict[str, Any]:
-        """获取统计信息。"""
+        """获取统计信息"""
         return self._pool.get_stats()
 
-    def shutdown(self) -> None:
-        """关闭调度器。"""
-        self._pool.shutdown()
+    async def get_stats_async(self) -> Dict[str, Any]:
+        """获取统计信息（异步）"""
+        return await self._pool.get_stats_async()
 
-    # ========== 事件回调 ==========
+    def get_queue_size(self) -> int:
+        """获取队列大小"""
+        return self._pool.get_queue_size()
+
+    def pause(self) -> None:
+        """暂停处理新任务"""
+        self._pool.pause()
+
+    def resume(self) -> None:
+        """恢复处理新任务"""
+        self._pool.resume()
 
     def on_submitted(self, handler: Callable) -> None:
+        """注册任务提交回调"""
         self._pool.on_submitted(handler)
 
     def on_started(self, handler: Callable) -> None:
+        """注册任务开始回调"""
         self._pool.on_started(handler)
 
     def on_completed(self, handler: Callable) -> None:
+        """注册任务完成回调"""
         self._pool.on_completed(handler)
 
     def on_failed(self, handler: Callable) -> None:
+        """注册任务失败回调"""
         self._pool.on_failed(handler)

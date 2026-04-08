@@ -7,8 +7,8 @@
 
 from neotask.api import TaskPool, TaskScheduler, TaskExecutor, SchedulerConfig, TaskPriority
 from neotask.api.task_scheduler import TaskScheduler
-from neotask.executors.async_executor import AsyncExecutor
-from neotask.executors.base import TaskExecutor
+from neotask.executor.async_executor import AsyncExecutor
+from neotask.executor.base import TaskExecutor
 from neotask.models.config import SchedulerConfig
 from neotask.models.task import TaskPriority
 

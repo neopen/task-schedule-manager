@@ -6,7 +6,7 @@
 """
 from neotask.api.task_pool import TaskPool
 from neotask.api.task_scheduler import TaskScheduler
-from neotask.executors.base import TaskExecutor
+from neotask.executor.base import TaskExecutor
 from neotask.models.config import SchedulerConfig
 from neotask.models.task import TaskPriority
 

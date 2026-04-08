@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
-from neotask.locks.base import TaskLock
+from neotask.lock.base import TaskLock
 
 
 class MemoryLock(TaskLock):

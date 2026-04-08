@@ -7,11 +7,11 @@
 
 import pytest
 import asyncio
-from neotask.executors import (
+from neotask.executor import (
     AsyncExecutor, ThreadExecutor, ProcessExecutor,
     ClassExecutor, ExecutorFactory, ExecutorType
 )
-from neotask.executors.exceptions import ExecutionTimeoutError
+from neotask.executor.exceptions import ExecutionTimeoutError
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@
 import asyncio
 from typing import Optional, Callable, Dict
 
-from neotask.locks.base import TaskLock
+from neotask.lock.base import TaskLock
 
 
 class WatchDog:

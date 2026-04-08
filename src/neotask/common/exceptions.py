@@ -16,6 +16,10 @@ class TaskNotFoundError(TaskSchedulerError):
         super().__init__(f"Task not found: {task_id}")
         self.task_id = task_id
 
+class TaskError(TaskSchedulerError):
+    def __init__(self, task_id: str):
+        super().__init__(f"Task Error: {task_id}")
+        self.task_id = task_id
 
 class TaskAlreadyExistsError(TaskSchedulerError):
     """Raised when task already exists."""

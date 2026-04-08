@@ -11,8 +11,8 @@ from typing import Any, Dict, Callable, Optional
 import functools
 import multiprocessing
 
-from neotask.executors.base import TaskExecutor
-from neotask.executors.exceptions import ExecutionTimeoutError
+from neotask.executor.base import TaskExecutor
+from neotask.executor.exceptions import ExecutionTimeoutError
 
 
 class ProcessExecutor(TaskExecutor):

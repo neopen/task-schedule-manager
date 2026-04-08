@@ -8,8 +8,8 @@
 import asyncio
 from typing import Any, Dict, Callable, Awaitable, Optional
 import inspect
-from neotask.executors.base import TaskExecutor
-from neotask.executors.exceptions import ExecutionTimeoutError, ExecutionCancelledError
+from neotask.executor.base import TaskExecutor
+from neotask.executor.exceptions import ExecutionTimeoutError, ExecutionCancelledError
 
 
 class AsyncExecutor(TaskExecutor):

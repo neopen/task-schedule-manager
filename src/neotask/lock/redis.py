@@ -10,7 +10,7 @@ from typing import Optional
 
 import redis.asyncio as redis
 
-from neotask.locks.base import TaskLock
+from neotask.lock.base import TaskLock
 
 
 class RedisLock(TaskLock):

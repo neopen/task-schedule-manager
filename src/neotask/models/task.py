@@ -16,7 +16,6 @@ class TaskStatus(Enum):
     """Task status enumeration."""
 
     PENDING = "pending"
-    # PROCESSING = "processing"
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
@@ -36,6 +35,14 @@ class TaskPriority(Enum):
     NORMAL = 2
     LOW = 3
 
+    @classmethod
+    def from_value(cls, value: int) -> "TaskPriority":
+        """Create from integer value."""
+        for priority in cls:
+            if priority.value == value:
+                return priority
+        return cls.NORMAL
+
 
 @dataclass
 class Task:
@@ -47,6 +54,7 @@ class Task:
     priority: TaskPriority = TaskPriority.NORMAL
     node_id: str = ""
     retry_count: int = 0
+    ttl: int = 3600  # Time to live in seconds
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -62,6 +70,7 @@ class Task:
             "priority": self.priority.value,
             "node_id": self.node_id,
             "retry_count": self.retry_count,
+            "ttl": self.ttl,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
@@ -82,9 +91,10 @@ class Task:
             task_id=data["task_id"],
             data=json.loads(data["data"]),
             status=TaskStatus(data["status"]),
-            priority=TaskPriority(int(data["priority"])),
+            priority=TaskPriority(data.get("priority", 2)),
             node_id=data.get("node_id", ""),
             retry_count=int(data.get("retry_count", 0)),
+            ttl=int(data.get("ttl", 3600)),
             created_at=parse_datetime(data["created_at"]) or datetime.now(timezone.utc),
             started_at=parse_datetime(data.get("started_at")),
             completed_at=parse_datetime(data.get("completed_at")),
@@ -114,3 +124,37 @@ class Task:
         """Mark task as cancelled."""
         self.status = TaskStatus.CANCELLED
         self.completed_at = datetime.now(timezone.utc)
+
+    def is_terminal(self) -> bool:
+        """Check if task is in terminal state."""
+        return self.status.is_terminal()
+
+    def is_retriable(self) -> bool:
+        """Check if task can be retried."""
+        return self.status == TaskStatus.FAILED and self.retry_count < 3
+
+
+class TaskStats:
+    """Task statistics container."""
+
+    def __init__(
+        self,
+        total: int = 0,
+        pending: int = 0,
+        running: int = 0,
+        completed: int = 0,
+        failed: int = 0,
+        cancelled: int = 0,
+    ):
+        self.total = total
+        self.pending = pending
+        self.running = running
+        self.completed = completed
+        self.failed = failed
+        self.cancelled = cancelled
+
+    @property
+    def success_rate(self) -> float:
+        """Calculate success rate."""
+        completed = self.completed or 1
+        return self.completed / (self.completed + self.failed) if completed > 0 else 1.0

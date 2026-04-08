@@ -10,8 +10,8 @@ import functools
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Callable, Optional
 
-from neotask.executors.base import TaskExecutor
-from neotask.executors.exceptions import ExecutionTimeoutError
+from neotask.executor.base import TaskExecutor
+from neotask.executor.exceptions import ExecutionTimeoutError
 
 
 class ThreadExecutor(TaskExecutor):

@@ -8,7 +8,7 @@
 import asyncio
 
 from neotask import TaskScheduler, TaskExecutor, SchedulerConfig
-from neotask.executors.async_executor import AsyncExecutor
+from neotask.executor.async_executor import AsyncExecutor
 
 
 # Option 1: Class-based executor

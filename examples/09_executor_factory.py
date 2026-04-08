@@ -8,7 +8,7 @@
 
 import asyncio
 from neotask import TaskScheduler, TaskExecutor
-from neotask.executors import ExecutorFactory, ExecutorType
+from neotask.executor import ExecutorFactory, ExecutorType
 
 
 # 1. Async function executor
