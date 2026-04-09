@@ -2,9 +2,9 @@
 
 轻量级 Python 异步任务队列管理器，无需额外服务，开箱即用。
 
-> NeoTask 是一个纯 Python 实现的异步任务调度系统，专为耗时任务（AI 生成、视频处理、数据爬取等）设计。无需部署 Redis、PostgreSQL 等外部服务，安装后即可在任意 Python 项目中直接使用。
+> NeoTask 是一个纯 Python 实现的异步任务队列调度系统，专为耗时任务（AI 生成、视频处理、数据爬取等）设计，支持定时任务、周期任务、延迟任务。无需部署 Redis、PostgreSQL 等外部服务，安装后即可在任意 Python 项目中直接使用。
 
-中文 | [English](./docs/README-en.md) | [架构文档](https://pengline.cn/2026/04/243d5a536d064df59c2ec8668362b8b5) | [PyPI](https://pypi.org/project/neotask/)
+中文 | [English](./docs/README-en.md) | [文档](https://pengline.cn/2026/04/243d5a536d064df59c2ec8668362b8b5/) | [PyPI](https://pypi.org/project/neotask/)
 
 [![PyPI version](https://badge.fury.io/py/neotask.svg)](https://pypi.org/project/neotask/) [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/) [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
