@@ -4,19 +4,17 @@
 @Author: HiPeng
 @Time: 2026/4/8 00:00
 """
-
-import asyncio
 import random
 import threading
+import time
+import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Any, Dict, List, Callable, Union
 
 from neotask.api.task_pool import TaskPool, TaskPoolConfig
-from neotask.common.exceptions import TaskAlreadyExistsError
-from neotask.common.logger import debug, error, info
 from neotask.models.config import SchedulerConfig
 from neotask.models.schedule import PeriodicTask
-from neotask.models.task import TaskPriority, TaskStatus
+from neotask.models.task import TaskPriority
 
 
 class TaskScheduler:
@@ -41,6 +39,7 @@ class TaskScheduler:
         self._pool = TaskPool(executor, pool_config)
         self._periodic_tasks: Dict[str, PeriodicTask] = {}
         self._running = False
+        self._stop_event = threading.Event()
         self._scheduler_thread: Optional[threading.Thread] = None
 
     # ========== 生命周期 ==========
@@ -53,14 +52,30 @@ class TaskScheduler:
             return
 
         self._running = True
+        self._stop_event.clear()
 
         def run_scheduler():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(self._scheduler_loop())
-            finally:
-                loop.close()
+            while not self._stop_event.is_set():
+                try:
+                    now = datetime.now()
+                    tasks_copy = list(self._periodic_tasks.items())
+
+                    for task_id, periodic_task in tasks_copy:
+                        if periodic_task.is_paused:
+                            continue
+
+                        if periodic_task.next_run and periodic_task.next_run <= now:
+                            # 关键：这行必须存在
+                            periodic_task.run_count += 1
+                            periodic_task.last_run = now
+                            periodic_task.next_run = now + timedelta(seconds=periodic_task.interval_seconds)
+
+                            exec_task_id = f"EXEC_{task_id}_{periodic_task.run_count}_{uuid.uuid4().hex[:4]}"
+                            self._pool.submit(periodic_task.data, exec_task_id, periodic_task.priority)
+
+                    time.sleep(self._config.scan_interval)
+                except Exception:
+                    time.sleep(self._config.scan_interval)
 
         self._scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
         self._scheduler_thread.start()
@@ -68,6 +83,7 @@ class TaskScheduler:
     def shutdown(self, graceful: bool = True, timeout: float = 30) -> None:
         """关闭调度器"""
         self._running = False
+        self._stop_event.set()
 
         if self._scheduler_thread and self._scheduler_thread.is_alive():
             self._scheduler_thread.join(timeout=5)
@@ -122,9 +138,9 @@ class TaskScheduler:
             priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
             ttl: int = 3600
     ) -> str:
-        """指定时间点执行任务（异步）"""
         delay_seconds = max(0.0, (execute_at - datetime.now()).total_seconds())
         return await self.submit_delayed_async(data, delay_seconds, task_id, priority, ttl)
+
     # ========== 周期任务 API ==========
 
     def submit_interval(
@@ -135,6 +151,8 @@ class TaskScheduler:
             priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
             run_immediately: bool = True
     ) -> str:
+        self._ensure_running()
+
         task_id = task_id or self._generate_task_id()
         priority_value = priority.value if isinstance(priority, TaskPriority) else priority
 
@@ -152,7 +170,9 @@ class TaskScheduler:
         self._periodic_tasks[task_id] = periodic_task
 
         if run_immediately:
-            self._pool.submit(data, task_id, priority)
+            # 立即执行一次，使用独立的任务 ID
+            exec_task_id = f"EXEC_{task_id}_0_{uuid.uuid4().hex[:4]}"
+            self._pool.submit(data, exec_task_id, priority)
 
         return task_id
 
@@ -163,6 +183,7 @@ class TaskScheduler:
             task_id: Optional[str] = None,
             priority: Union[int, TaskPriority] = TaskPriority.NORMAL
     ) -> str:
+        self._ensure_running()
         next_run = self._parse_cron(cron_expr)
         task_id = task_id or self._generate_task_id()
         priority_value = priority.value if isinstance(priority, TaskPriority) else priority
@@ -221,90 +242,16 @@ class TaskScheduler:
             for task in self._periodic_tasks.values()
         ]
 
-    # ========== 调度循环 ==========
-
-    async def _reschedule_periodic_task(self, task_id: str, priority: int) -> bool:
-        """重新调度周期任务 - 重置状态并重新入队"""
-        try:
-            # 通过 _pool._lifecycle 获取任务
-            task = await self._pool._lifecycle.get_task(task_id)
-            if task is None:
-                return False
-
-            # 重置任务状态为 PENDING
-            task.status = TaskStatus.PENDING
-            task.started_at = None
-            task.completed_at = None
-            task.result = None
-            task.error = None
-
-            # 保存更新后的任务
-            await self._pool._task_repo.save(task)
-
-            # 重新入队
-            await self._pool._queue_scheduler.push(task_id, priority)
-            return True
-        except Exception as e:
-            return False
-
-
-    async def _scheduler_loop(self) -> None:
-        """调度循环 - 处理周期任务"""
-        while self._running:
-            try:
-                now = datetime.now()
-                tasks_to_run = []
-
-                # 收集需要执行的任务
-                for task_id, periodic_task in list(self._periodic_tasks.items()):
-                    if periodic_task.is_paused:
-                        continue
-
-                    if periodic_task.next_run and periodic_task.next_run <= now:
-                        tasks_to_run.append((task_id, periodic_task))
-
-                # 执行任务
-                for task_id, periodic_task in tasks_to_run:
-                    # 先更新计数和上次执行时间
-                    periodic_task.run_count += 1
-                    periodic_task.last_run = now
-
-                    # 计算下次执行时间
-                    if periodic_task.cron_expr:
-                        periodic_task.next_run = self._parse_cron(periodic_task.cron_expr)
-                    else:
-                        periodic_task.next_run = now + timedelta(
-                            seconds=periodic_task.interval_seconds
-                        )
-
-                    # 提交任务（同步方法）
-                    try:
-                        self._pool.submit(
-                            periodic_task.data,
-                            task_id,
-                            periodic_task.priority
-                        )
-                        debug(f"[DEBUG] 周期任务 {task_id} 已提交，下次执行: {periodic_task.next_run}")
-                    except TaskAlreadyExistsError:
-                        # 任务已存在，使用 redispatch
-                        await self._pool._dispatcher.redispatch(task_id)
-                        info(f"[DEBUG] 周期任务 {task_id} 已重新调度")
-                    except Exception as e:
-                        error(f"[ERROR] 提交周期任务失败: {e}")
-
-                await asyncio.sleep(self._config.scan_interval)
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                error(f"[ERROR] 调度循环错误: {e}")
-                await asyncio.sleep(self._config.scan_interval)
-
     # ========== 辅助方法 ==========
 
     def _generate_task_id(self) -> str:
         # return f"PRD{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6]}"
         return f"PRD{datetime.now().strftime('%Y%m%d%H%M%S')}{random.randint(100000, 999999)}"
+
+    def _ensure_running(self):
+        """确保调度器正在运行"""
+        if not self._running:
+            self.start()
 
     # ========== 委托给 TaskPool 的方法 ==========
 

@@ -156,5 +156,7 @@ class TaskStats:
     @property
     def success_rate(self) -> float:
         """Calculate success rate."""
-        completed = self.completed or 1
-        return self.completed / (self.completed + self.failed) if completed > 0 else 1.0
+        total = self.completed + self.failed
+        if total == 0:
+            return 1.0
+        return self.completed / total
