@@ -9,7 +9,6 @@ import asyncio
 import inspect
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from typing import Optional, Dict, Any, List, Callable, Union
 
 from neotask.core.dispatcher import TaskDispatcher
@@ -19,7 +18,7 @@ from neotask.event.bus import EventBus, TaskEvent
 from neotask.executor.base import TaskExecutor
 from neotask.executor.factory import ExecutorFactory
 from neotask.lock.factory import LockFactory
-from neotask.models.config import StorageConfig, LockConfig
+from neotask.models.config import StorageConfig, LockConfig, TaskPoolConfig
 from neotask.models.task import TaskPriority
 from neotask.monitor.health import SystemHealthChecker
 from neotask.monitor.metrics import MetricsCollector
@@ -28,49 +27,6 @@ from neotask.queue.scheduler import QueueScheduler
 from neotask.storage.factory import StorageFactory
 from neotask.worker.pool import WorkerPool
 from neotask.worker.supervisor import WorkerSupervisor
-
-
-@dataclass
-class TaskPoolConfig:
-    """TaskPool配置 - 专注于即时任务"""
-    # 存储配置
-    storage_type: str = "memory"
-    sqlite_path: str = "neotask.db"
-    redis_url: Optional[str] = None
-
-    # 执行器配置
-    executor_type: str = "async"
-    max_workers: int = 10
-
-    # Worker配置
-    worker_concurrency: int = 10
-    prefetch_size: int = 20
-    task_timeout: Optional[float] = None
-
-    # 队列配置
-    queue_max_size: int = 10000
-    priority_levels: int = 4
-
-    # 锁配置
-    lock_type: str = "memory"
-    lock_timeout: int = 30
-
-    # 监控配置
-    enable_metrics: bool = True
-    enable_health_check: bool = True
-    enable_reporter: bool = False
-
-    # 重试配置
-    max_retries: int = 3
-    retry_delay: float = 1.0
-
-    # 节点标识
-    node_id: str = ""
-
-    def __post_init__(self):
-        if not self.node_id:
-            import socket
-            self.node_id = socket.gethostname()
 
 
 class TaskPool:

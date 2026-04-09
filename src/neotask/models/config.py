@@ -92,7 +92,7 @@ class QueueConfig:
 class WebUIConfig:
     """Web UI configuration."""
 
-    enabled: bool = False
+    enable: bool = False
     host: str = "127.0.0.1"
     port: int = 8080
     auto_open: bool = False
@@ -101,12 +101,12 @@ class WebUIConfig:
     @classmethod
     def disabled(cls) -> "WebUIConfig":
         """Create disabled web UI config."""
-        return cls(enabled=False)
+        return cls(enable=False)
 
     @classmethod
     def enabled(cls, port: int = 8080, auto_open: bool = False) -> "WebUIConfig":
         """Create enabled web UI config."""
-        return cls(enabled=True, port=port, auto_open=auto_open)
+        return cls(enable=True, port=port, auto_open=auto_open)
 
 
 @dataclass
@@ -133,9 +133,64 @@ class ExecutorConfig:
 
 
 @dataclass
-class SchedulerConfig:
-    """Main scheduler configuration."""
+class TaskPoolConfig:
+    """TaskPool配置 - 专注于即时任务"""
+    # 存储配置
+    storage_type: str = "memory"
+    sqlite_path: str = "neotask.db"
+    redis_url: Optional[str] = None
 
+    # 执行器配置
+    executor_type: str = "async"
+    max_workers: int = 10
+
+    # Worker配置
+    worker_concurrency: int = 10
+    prefetch_size: int = 20
+    task_timeout: Optional[float] = None
+
+    # 队列配置
+    queue_max_size: int = 10000
+    priority_levels: int = 4
+
+    # 锁配置
+    lock_type: str = "memory"
+    lock_timeout: int = 30
+
+    # 监控配置
+    enable_metrics: bool = True
+    enable_health_check: bool = True
+    enable_reporter: bool = False
+
+    # 重试配置
+    max_retries: int = 3
+    retry_delay: float = 1.0
+
+    # 节点标识
+    node_id: str = ""
+
+    def __post_init__(self):
+        if not self.node_id:
+            import socket
+            self.node_id = socket.gethostname()
+
+
+@dataclass
+class SchedulerConfig:
+    """调度器配置 - 专注于定时任务"""
+    storage_type: str = "memory"
+    sqlite_path: str = "neotask.db"
+    redis_url: Optional[str] = None
+
+    worker_concurrency: int = 10
+    max_retries: int = 3
+    retry_delay: float = 1.0
+    enable_persistence: bool = False
+    scan_interval: float = 0.05
+
+
+@dataclass
+class TaskConfig:
     node_id: str = ""
     storage: StorageConfig = field(default_factory=StorageConfig.memory)
     lock: LockConfig = field(default_factory=LockConfig.memory)
@@ -151,7 +206,7 @@ class SchedulerConfig:
             self.node_id = socket.gethostname()
 
     @classmethod
-    def memory(cls, node_id: Optional[str] = None) -> "SchedulerConfig":
+    def memory(cls, node_id: Optional[str] = None) -> "TaskConfig":
         """Create memory-only config (single node)."""
         config = cls()
         if node_id:
@@ -159,7 +214,7 @@ class SchedulerConfig:
         return config
 
     @classmethod
-    def redis(cls, redis_url: str, node_id: Optional[str] = None) -> "SchedulerConfig":
+    def redis(cls, redis_url: str, node_id: Optional[str] = None) -> "TaskConfig":
         """Create Redis-based config (distributed)."""
         config = cls(
             storage=StorageConfig.redis(redis_url),
@@ -170,7 +225,7 @@ class SchedulerConfig:
         return config
 
     @classmethod
-    def with_webui(cls, port: int = 8080, auto_open: bool = False, **kwargs) -> "SchedulerConfig":
+    def with_webui(cls, port: int = 8080, auto_open: bool = False, **kwargs) -> "TaskConfig":
         """Create config with web UI enabled."""
         config = cls(**kwargs)
         config.webui = WebUIConfig.enabled(port, auto_open)

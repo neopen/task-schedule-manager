@@ -6,53 +6,25 @@
 """
 
 import asyncio
+import threading
 import uuid
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Optional, Any, Dict, List, Callable, Union
-import threading
 
 from neotask.api.task_pool import TaskPool, TaskPoolConfig
-from neotask.models.task import TaskPriority, TaskStatus
 from neotask.common.exceptions import TaskAlreadyExistsError
-
-
-@dataclass
-class PeriodicTask:
-    """周期任务定义"""
-    task_id: str
-    data: Dict[str, Any]
-    interval_seconds: float
-    priority: int
-    cron_expr: Optional[str] = None
-    next_run: Optional[datetime] = None
-    last_run: Optional[datetime] = None
-    run_count: int = 0
-    is_paused: bool = False
-    created_at: datetime = field(default_factory=datetime.now)
-
-
-@dataclass
-class SchedulerConfig:
-    """调度器配置 - 专注于定时任务"""
-    storage_type: str = "memory"
-    sqlite_path: str = "neotask.db"
-    redis_url: Optional[str] = None
-
-    worker_concurrency: int = 10
-    max_retries: int = 3
-    retry_delay: float = 1.0
-    enable_persistence: bool = False
-    scan_interval: float = 0.05
+from neotask.models.config import SchedulerConfig
+from neotask.models.schedule import PeriodicTask
+from neotask.models.task import TaskPriority, TaskStatus
 
 
 class TaskScheduler:
     """定时任务调度器"""
 
     def __init__(
-        self,
-        executor: Optional[Union[Callable]] = None,
-        config: Optional[SchedulerConfig] = None
+            self,
+            executor: Optional[Union[Callable]] = None,
+            config: Optional[SchedulerConfig] = None
     ):
         self._config = config or SchedulerConfig()
 
@@ -111,32 +83,32 @@ class TaskScheduler:
     # ========== 延时任务 API ==========
 
     def submit_delayed(
-        self,
-        data: Dict[str, Any],
-        delay_seconds: float,
-        task_id: Optional[str] = None,
-        priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
-        ttl: int = 3600
+            self,
+            data: Dict[str, Any],
+            delay_seconds: float,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
+            ttl: int = 3600
     ) -> str:
         return self._pool.submit(data, task_id, priority, delay_seconds, ttl)
 
     async def submit_delayed_async(
-        self,
-        data: Dict[str, Any],
-        delay_seconds: float,
-        task_id: Optional[str] = None,
-        priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
-        ttl: int = 3600
+            self,
+            data: Dict[str, Any],
+            delay_seconds: float,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
+            ttl: int = 3600
     ) -> str:
         return await self._pool.submit_async(data, task_id, priority, delay_seconds, ttl)
 
     def submit_at(
-        self,
-        data: Dict[str, Any],
-        execute_at: datetime,
-        task_id: Optional[str] = None,
-        priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
-        ttl: int = 3600
+            self,
+            data: Dict[str, Any],
+            execute_at: datetime,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
+            ttl: int = 3600
     ) -> str:
         delay_seconds = max(0.0, (execute_at - datetime.now()).total_seconds())
         return self.submit_delayed(data, delay_seconds, task_id, priority, ttl)
@@ -144,12 +116,12 @@ class TaskScheduler:
     # ========== 周期任务 API ==========
 
     def submit_interval(
-        self,
-        data: Dict[str, Any],
-        interval_seconds: float,
-        task_id: Optional[str] = None,
-        priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
-        run_immediately: bool = True
+            self,
+            data: Dict[str, Any],
+            interval_seconds: float,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
+            run_immediately: bool = True
     ) -> str:
         task_id = task_id or self._generate_task_id()
         priority_value = priority.value if isinstance(priority, TaskPriority) else priority
@@ -173,11 +145,11 @@ class TaskScheduler:
         return task_id
 
     def submit_cron(
-        self,
-        data: Dict[str, Any],
-        cron_expr: str,
-        task_id: Optional[str] = None,
-        priority: Union[int, TaskPriority] = TaskPriority.NORMAL
+            self,
+            data: Dict[str, Any],
+            cron_expr: str,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL
     ) -> str:
         next_run = self._parse_cron(cron_expr)
         task_id = task_id or self._generate_task_id()
@@ -323,8 +295,8 @@ class TaskScheduler:
         return self._pool.submit(data, task_id, priority, delay, ttl)
 
     async def submit_async(self, data: Dict[str, Any], task_id: Optional[str] = None,
-                          priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
-                          delay: float = 0, ttl: int = 3600) -> str:
+                           priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
+                           delay: float = 0, ttl: int = 3600) -> str:
         return await self._pool.submit_async(data, task_id, priority, delay, ttl)
 
     def wait_for_result(self, task_id: str, timeout: float = 300) -> Any:
