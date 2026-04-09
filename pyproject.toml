@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "neotask"
 version = "0.1.1"
-description = "NeoTask - 轻量级 Python 异步任务队列管理器 | Lightweight Python Async Task Queue Manager"
+description = "NeoTask - 轻量级 Python 异步任务队列，支持即时/延时/周期任务，内置优先级队列、自动重试 | Lightweight Python Async Task Queue Manager"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -45,7 +45,6 @@ classifiers = [
     # 主题
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: System :: Distributed Computing",
-    "Topic :: System :: Scheduling",
 ]
 
 requires-python = ">=3.9"
@@ -95,7 +94,7 @@ docs = [
 # 项目链接
 Homepage = "https://github.com/neopen/task-schedule-manager"
 Repository = "https://github.com/neopen/task-schedule-manager"
-Documentation = "https://pengline.cn/2026/03/0ec8d887591a40c98be76645d33a2f23"
+Documentation = "https://github.com/neopen/task-schedule-manager#readme"
 Issues = "https://github.com/neopen/task-schedule-manager/issues"
 Changelog = "https://github.com/neopen/task-schedule-manager/releases"
 
