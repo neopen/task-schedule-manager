@@ -13,6 +13,7 @@ from typing import Optional, Any, Dict, List, Callable, Union
 
 from neotask.api.task_pool import TaskPool, TaskPoolConfig
 from neotask.common.exceptions import TaskAlreadyExistsError
+from neotask.common.logger import debug, error, info
 from neotask.models.config import SchedulerConfig
 from neotask.models.schedule import PeriodicTask
 from neotask.models.task import TaskPriority, TaskStatus
@@ -113,6 +114,17 @@ class TaskScheduler:
         delay_seconds = max(0.0, (execute_at - datetime.now()).total_seconds())
         return self.submit_delayed(data, delay_seconds, task_id, priority, ttl)
 
+    async def submit_at_async(
+            self,
+            data: Dict[str, Any],
+            execute_at: datetime,
+            task_id: Optional[str] = None,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
+            ttl: int = 3600
+    ) -> str:
+        """指定时间点执行任务（异步）"""
+        delay_seconds = max(0.0, (execute_at - datetime.now()).total_seconds())
+        return await self.submit_delayed_async(data, delay_seconds, task_id, priority, ttl)
     # ========== 周期任务 API ==========
 
     def submit_interval(
@@ -235,6 +247,7 @@ class TaskScheduler:
         except Exception as e:
             return False
 
+
     async def _scheduler_loop(self) -> None:
         """调度循环 - 处理周期任务"""
         while self._running:
@@ -252,7 +265,7 @@ class TaskScheduler:
 
                 # 执行任务
                 for task_id, periodic_task in tasks_to_run:
-                    # 更新计数和上次执行时间
+                    # 先更新计数和上次执行时间
                     periodic_task.run_count += 1
                     periodic_task.last_run = now
 
@@ -264,29 +277,34 @@ class TaskScheduler:
                             seconds=periodic_task.interval_seconds
                         )
 
-                    # 重新调度任务（重置状态并重新入队）
-                    success = await self._reschedule_periodic_task(task_id, periodic_task.priority)
-
-                    if not success:
-                        # 如果重新调度失败，尝试创建新任务
-                        try:
-                            self._pool.submit(periodic_task.data, task_id, periodic_task.priority)
-                        except TaskAlreadyExistsError:
-                            # 任务已存在，尝试使用 redispatch
-                            await self._pool._dispatcher.redispatch(task_id)
+                    # 提交任务（同步方法）
+                    try:
+                        self._pool.submit(
+                            periodic_task.data,
+                            task_id,
+                            periodic_task.priority
+                        )
+                        debug(f"[DEBUG] 周期任务 {task_id} 已提交，下次执行: {periodic_task.next_run}")
+                    except TaskAlreadyExistsError:
+                        # 任务已存在，使用 redispatch
+                        await self._pool._dispatcher.redispatch(task_id)
+                        info(f"[DEBUG] 周期任务 {task_id} 已重新调度")
+                    except Exception as e:
+                        error(f"[ERROR] 提交周期任务失败: {e}")
 
                 await asyncio.sleep(self._config.scan_interval)
 
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception as e:
+                error(f"[ERROR] 调度循环错误: {e}")
                 await asyncio.sleep(self._config.scan_interval)
 
     # ========== 辅助方法 ==========
 
     def _generate_task_id(self) -> str:
         # return f"PRD{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6]}"
-        return f"PRD{datetime.now().strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
+        return f"PRD{datetime.now().strftime('%Y%m%d%H%M%S')}{random.randint(100000, 999999)}"
 
     # ========== 委托给 TaskPool 的方法 ==========
 

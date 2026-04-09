@@ -267,11 +267,31 @@ class TaskLifecycleManager:
             # 其他异常
             raise
 
+
     async def get_task_stats(self) -> TaskStats:
         """获取任务统计"""
         stats = TaskStats()
-        # 从存储获取统计
-        # TODO: 实现统计查询
+
+        # 从缓存或存储获取统计
+        async with self._lock:
+            for task in self._cache.values():
+                stats.total += 1
+                if task.status == TaskStatus.PENDING:
+                    stats.pending += 1
+                elif task.status == TaskStatus.RUNNING:
+                    stats.running += 1
+                elif task.status == TaskStatus.SUCCESS:
+                    stats.completed += 1
+                elif task.status == TaskStatus.FAILED:
+                    stats.failed += 1
+                elif task.status == TaskStatus.CANCELLED:
+                    stats.cancelled += 1
+
+        # 如果缓存未启用或缓存为空，从存储获取
+        if stats.total == 0 and not self._cache_enabled:
+            # TODO: 从存储聚合统计
+            pass
+
         return stats
 
     async def list_tasks(
@@ -305,7 +325,7 @@ class TaskLifecycleManager:
     def _generate_task_id(self) -> str:
         """生成任务ID"""
         # return f"TSK{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6]}"
-        return f"TSK{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}"
+        return f"TSK{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{random.randint(100000, 999999)}"
 
     def clear_cache(self):
         """清空缓存"""
