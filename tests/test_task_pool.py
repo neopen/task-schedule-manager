@@ -102,7 +102,7 @@ class TestTaskPoolSubmit:
         task_id = await pool.submit_async({"test": "async_submit"})
         assert task_id is not None
         assert isinstance(task_id, str)
-        assert task_id.startswith("TSK_")
+        assert task_id.startswith("TSK")
 
         pool.shutdown()
 

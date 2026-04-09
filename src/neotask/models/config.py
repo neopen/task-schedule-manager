@@ -174,6 +174,30 @@ class TaskPoolConfig:
             import socket
             self.node_id = socket.gethostname()
 
+    @classmethod
+    def memory(cls, node_id: Optional[str] = None) -> "TaskPoolConfig":
+        """Create memory-only config."""
+        config = cls(storage_type="memory")
+        if node_id:
+            config.node_id = node_id
+        return config
+
+    @classmethod
+    def sqlite(cls, path: str = "neotask.db", node_id: Optional[str] = None) -> "TaskPoolConfig":
+        """Create SQLite config."""
+        config = cls(storage_type="sqlite", sqlite_path=path)
+        if node_id:
+            config.node_id = node_id
+        return config
+
+    @classmethod
+    def redis(cls, url: str, node_id: Optional[str] = None) -> "TaskPoolConfig":
+        """Create Redis config."""
+        config = cls(storage_type="redis", redis_url=url)
+        if node_id:
+            config.node_id = node_id
+        return config
+
 
 @dataclass
 class SchedulerConfig:
@@ -188,9 +212,25 @@ class SchedulerConfig:
     enable_persistence: bool = False
     scan_interval: float = 0.05
 
+    @classmethod
+    def memory(cls, **kwargs) -> "SchedulerConfig":
+        """Create memory-only scheduler config."""
+        return cls(storage_type="memory", **kwargs)
+
+    @classmethod
+    def sqlite(cls, path: str = "neotask.db", **kwargs) -> "SchedulerConfig":
+        """Create SQLite scheduler config."""
+        return cls(storage_type="sqlite", sqlite_path=path, **kwargs)
+
+    @classmethod
+    def redis(cls, url: str, **kwargs) -> "SchedulerConfig":
+        """Create Redis scheduler config."""
+        return cls(storage_type="redis", redis_url=url, **kwargs)
+
 
 @dataclass
 class TaskConfig:
+    """统一任务配置（兼容旧版 API）"""
     node_id: str = ""
     storage: StorageConfig = field(default_factory=StorageConfig.memory)
     lock: LockConfig = field(default_factory=LockConfig.memory)
@@ -219,6 +259,17 @@ class TaskConfig:
         config = cls(
             storage=StorageConfig.redis(redis_url),
             lock=LockConfig.redis(redis_url),
+        )
+        if node_id:
+            config.node_id = node_id
+        return config
+
+    @classmethod
+    def sqlite(cls, path: str = "tasks.db", node_id: Optional[str] = None) -> "TaskConfig":
+        """Create SQLite-based config."""
+        config = cls(
+            storage=StorageConfig.sqlite(path),
+            lock=LockConfig.memory(),
         )
         if node_id:
             config.node_id = node_id

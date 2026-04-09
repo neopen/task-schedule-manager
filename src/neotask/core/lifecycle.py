@@ -304,7 +304,7 @@ class TaskLifecycleManager:
 
     def _generate_task_id(self) -> str:
         """生成任务ID"""
-        return f"TSK_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        return f"TSK{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6]}"
 
     def clear_cache(self):
         """清空缓存"""

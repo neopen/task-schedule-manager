@@ -285,7 +285,7 @@ class TaskScheduler:
     # ========== 辅助方法 ==========
 
     def _generate_task_id(self) -> str:
-        return f"PRD_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        return f"PRD{datetime.now().strftime('%Y%m%d%H%M%S')}{uuid.uuid4().hex[:6]}"
 
     # ========== 委托给 TaskPool 的方法 ==========
 

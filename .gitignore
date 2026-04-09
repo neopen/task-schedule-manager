@@ -19,6 +19,7 @@ __pycache__/
 .classpath
 .factorypath
 .project
+.coverage
 .DS_Store
 db.json
 *.log
