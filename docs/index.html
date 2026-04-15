@@ -131,6 +131,11 @@
                 <h3>可观测性</h3>
                 <p>事件总线 + 指标收集，支持 Prometheus 集成</p>
             </div>
+            <div class="feature-card">
+                <div class="feature-icon"><i class="fas fa-project-diagram"></i></div>
+                <h3>任务编排</h3>
+                <p>DAG工作流引擎，支持复杂任务依赖管理和条件分支</p>
+            </div>
         </div>
     </section>
 
@@ -146,7 +151,7 @@
                 <div class="arch-components">
                     <span class="arch-component">TaskPool</span>
                     <span class="arch-component">TaskScheduler</span>
-                    <span class="arch-component">TaskEngine</span>
+                    <span class="arch-component">WorkflowEngine</span>
                 </div>
             </div>
             <div class="arch-arrow"><i class="fas fa-arrow-down"></i></div>
@@ -306,15 +311,29 @@ results = pool.wait_all(task_ids)</code></pre>
             <div class="version-item">
                 <div class="version-badge">v0.2</div>
                 <div class="version-content">
-                    <h4>监控 + 定时任务</h4>
-                    <p>事件总线、指标收集、延时队列、周期任务、Cron</p>
+                    <h4>可观测性</h4>
+                    <p>事件总线、指标收集、健康检查</p>
                 </div>
             </div>
             <div class="version-item">
                 <div class="version-badge">v0.3</div>
                 <div class="version-content">
-                    <h4>分布式核心</h4>
-                    <p>Redis共享队列、分布式锁、预取机制</p>
+                    <h4>定时调度</h4>
+                    <p>延时队列、周期任务、Cron表达式</p>
+                </div>
+            </div>
+            <div class="version-item">
+                <div class="version-badge">v0.4</div>
+                <div class="version-content">
+                    <h4>分布式基础</h4>
+                    <p>Redis共享队列、分布式锁</p>
+                </div>
+            </div>
+            <div class="version-item">
+                <div class="version-badge">v0.5</div>
+                <div class="version-content">
+                    <h4>性能优化</h4>
+                    <p>预取机制、批量操作、连接池优化</p>
                 </div>
             </div>
             <div class="version-item">
@@ -327,119 +346,15 @@ results = pool.wait_all(task_ids)</code></pre>
             <div class="version-item">
                 <div class="version-badge">v1.5</div>
                 <div class="version-content">
-                    <h4>企业级能力</h4>
-                    <p>Prometheus集成、多租户支持</p>
+                    <h4>任务编排</h4>
+                    <p>DAG工作流、条件分支、并行执行</p>
                 </div>
             </div>
             <div class="version-item">
                 <div class="version-badge future">v2.0</div>
                 <div class="version-content">
-                    <h4>Web UI 面板</h4>
-                    <p>可视化任务管理、实时监控面板、任务拓扑图</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 用户评价 -->
-   <!-- <section class="testimonials">
-        <div class="section-header">
-            <h2>用户评价</h2>
-            <p>来自社区的真实反馈</p>
-        </div>
-        <div class="testimonials-grid">
-            <div class="testimonial-card">
-                <div class="testimonial-text">
-                    "NeoTask 的嵌入式设计非常巧妙，我们只用了半天就完成了集成，性能表现超出预期。"
-                </div>
-                <div class="testimonial-author">
-                    <div class="author-icon"><i class="fas fa-user"></i></div>
-                    <div class="author-info">
-                        <div class="author-name">李明</div>
-                        <div class="author-title">某电商平台架构师</div>
-                    </div>
-                </div>
-            </div>
-            <div class="testimonial-card">
-                <div class="testimonial-text">
-                    "从单机到分布式的平滑演进让我们没有后顾之忧，Redis 存储模式非常稳定。"
-                </div>
-                <div class="testimonial-author">
-                    <div class="author-icon"><i class="fas fa-user"></i></div>
-                    <div class="author-info">
-                        <div class="author-name">王芳</div>
-                        <div class="author-title">某金融科技公司技术负责人</div>
-                    </div>
-                </div>
-            </div>
-            <div class="testimonial-card">
-                <div class="testimonial-text">
-                    "API 设计非常直观，文档完善，社区响应迅速，强烈推荐！"
-                </div>
-                <div class="testimonial-author">
-                    <div class="author-icon"><i class="fas fa-user"></i></div>
-                    <div class="author-info">
-                        <div class="author-name">张伟</div>
-                        <div class="author-title">开源贡献者</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>-->
-
-    <!-- 路线图 -->
-    <section id="roadmap" class="roadmap">
-        <div class="section-header">
-            <h2>产品路线图</h2>
-            <p>NeoTask 的未来规划</p>
-        </div>
-        <div class="timeline">
-            <div class="timeline-item">
-                <div class="timeline-dot completed"></div>
-                <div class="timeline-content">
-                    <span class="timeline-badge completed">已完成</span>
-                    <h4>基础任务队列</h4>
-                    <p>支持即时任务、优先级队列、内存/SQLite存储</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot current"></div>
-                <div class="timeline-content">
-                    <span class="timeline-badge current">进行中</span>
-                    <h4>定时调度能力</h4>
-                    <p>延时执行、周期任务、Cron表达式支持</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot"></div>
-                <div class="timeline-content">
-                    <span class="timeline-badge">计划中</span>
-                    <h4>分布式支持</h4>
-                    <p>Redis存储、分布式锁、预取机制</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot"></div>
-                <div class="timeline-content">
-                    <span class="timeline-badge">计划中</span>
-                    <h4>高可用保障</h4>
-                    <p>看门狗机制、超时检测、故障自动恢复</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot"></div>
-                <div class="timeline-content">
-                    <span class="timeline-badge">规划中</span>
-                    <h4>Web UI 监控面板</h4>
-                    <p>可视化任务管理、实时监控、任务拓扑图</p>
-                </div>
-            </div>
-            <div class="timeline-item">
-                <div class="timeline-dot"></div>
-                <div class="timeline-content">
-                    <span class="timeline-badge">规划中</span>
-                    <h4>任务编排引擎</h4>
-                    <p>DAG工作流、任务依赖管理、条件分支</p>
+                    <h4>企业级能力</h4>
+                    <p>Web UI面板、多租户、Prometheus集成</p>
                 </div>
             </div>
         </div>
