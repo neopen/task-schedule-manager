@@ -6,7 +6,7 @@
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -14,6 +14,13 @@ from neotask.core.lifecycle import TaskLifecycleManager
 from neotask.event.bus import EventBus
 from neotask.models.task import TaskStatus, TaskPriority
 from neotask.storage.memory import MemoryTaskRepository
+
+
+# ========== 测试辅助函数 ==========
+
+def get_utc_now():
+    """获取当前 UTC 时间"""
+    return datetime.now(timezone.utc)
 
 
 # ========== 基础功能测试 ==========
@@ -27,7 +34,11 @@ class TestLifecycleBasic:
         repo = MemoryTaskRepository()
         event_bus = EventBus()
         await event_bus.start()
-        return TaskLifecycleManager(repo, event_bus), event_bus
+        manager = TaskLifecycleManager(repo, event_bus)
+        yield manager, event_bus
+        # 清理
+        await event_bus.stop()
+        await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
     async def test_create_task(self, lifecycle):
@@ -176,7 +187,10 @@ class TestLifecycleStats:
         repo = MemoryTaskRepository()
         event_bus = EventBus()
         await event_bus.start()
-        return TaskLifecycleManager(repo, event_bus)
+        manager = TaskLifecycleManager(repo, event_bus)
+        yield manager
+        await event_bus.stop()
+        await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
     async def test_get_stats_empty(self, lifecycle):
@@ -252,7 +266,10 @@ class TestLifecycleCleanup:
         repo = MemoryTaskRepository()
         event_bus = EventBus()
         await event_bus.start()
-        return TaskLifecycleManager(repo, event_bus)
+        manager = TaskLifecycleManager(repo, event_bus)
+        yield manager
+        await event_bus.stop()
+        await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
     async def test_cleanup_expired_tasks(self, lifecycle):
@@ -293,22 +310,44 @@ class TestLifecycleCleanup:
         """测试按时间清理"""
         manager = lifecycle
 
-        # 创建旧任务（手动设置时间）
+        # 创建旧任务 - 直接通过存储层创建并手动修改时间
         old_task = await manager.create_task(data={"test": "old"})
-        # 修改 completed_at 为过去时间
-        old_task.completed_at = datetime.now() - timedelta(days=2)
+
+        # 完成旧任务（这样才能被清理）
+        await manager.start_task(old_task.task_id, "node-1")
+        await manager.complete_task(old_task.task_id, {"ok": True})
+
+        # 手动修改 completed_at 为过去时间（2天前）
+        old_task.completed_at = datetime.now(timezone.utc) - timedelta(days=2)
         await manager._task_repo.save(old_task)
+
+        # 更新缓存
+        if manager._cache_enabled:
+            async with manager._lock:
+                manager._cache[old_task.task_id] = old_task
 
         # 创建新任务
         new_task = await manager.create_task(data={"test": "new"})
         await manager.start_task(new_task.task_id, "node-1")
         await manager.complete_task(new_task.task_id, {"ok": True})
 
+        # 验证旧任务的 completed_at 已修改
+        verify_old = await manager.get_task(old_task.task_id)
+        assert verify_old is not None
+        assert verify_old.completed_at is not None
+        age = (datetime.now(timezone.utc) - verify_old.completed_at).total_seconds()
+        print(f"Old task age: {age} seconds (should be ~172800)")
+
         # 按1天时间清理
         cleaned = await manager.cleanup_expired_by_time(max_age_seconds=86400)
 
-        assert cleaned >= 1
+        print(f"Cleaned count: {cleaned}")
+        assert cleaned >= 1, f"Expected at least 1 cleaned, got {cleaned}"
+
+        # 旧任务应该被删除
         assert await manager.get_task(old_task.task_id) is None
+
+        # 新任务应该还在
         assert await manager.get_task(new_task.task_id) is not None
 
     @pytest.mark.asyncio
@@ -342,7 +381,10 @@ class TestLifecycleWait:
         repo = MemoryTaskRepository()
         event_bus = EventBus()
         await event_bus.start()
-        return TaskLifecycleManager(repo, event_bus)
+        manager = TaskLifecycleManager(repo, event_bus)
+        yield manager
+        await event_bus.stop()
+        await asyncio.sleep(0.1)
 
     @pytest.mark.asyncio
     async def test_wait_for_completion(self, lifecycle):
@@ -357,7 +399,11 @@ class TestLifecycleWait:
             await manager.start_task(task.task_id, "node-1")
             await manager.complete_task(task.task_id, {"result": "done"})
 
+        # 创建任务但不等待
         asyncio.create_task(complete_after_delay())
+
+        # 给任务一点时间启动
+        await asyncio.sleep(0.05)
 
         # 等待完成
         result = await manager.wait_for_task(task.task_id, timeout=5)
@@ -377,6 +423,7 @@ class TestLifecycleWait:
             await manager.fail_task(task.task_id, "Task failed")
 
         asyncio.create_task(fail_after_delay())
+        await asyncio.sleep(0.05)
 
         with pytest.raises(Exception) as exc_info:
             await manager.wait_for_task(task.task_id, timeout=5)
@@ -413,11 +460,30 @@ class TestLifecycleWait:
 class TestLifecycleCache:
     """测试缓存功能"""
 
-    @pytest.mark.asyncio
-    async def test_cache_enabled(self):
-        """测试缓存启用"""
+    @pytest.fixture
+    async def lifecycle_with_cache(self):
+        """创建带缓存的生命周期管理器"""
         repo = MemoryTaskRepository()
-        manager = TaskLifecycleManager(repo, cache_enabled=True)
+        event_bus = EventBus()
+        await event_bus.start()
+        manager = TaskLifecycleManager(repo, event_bus, cache_enabled=True)
+        yield manager
+        await event_bus.stop()
+        await asyncio.sleep(0.1)
+
+    @pytest.fixture
+    async def lifecycle_without_cache(self):
+        """创建禁用缓存的生命周期管理器"""
+        repo = MemoryTaskRepository()
+        event_bus = EventBus()
+        await event_bus.start()
+        # 传入 cache_enabled=False
+        return TaskLifecycleManager(repo, event_bus, cache_enabled=False)
+
+    @pytest.mark.asyncio
+    async def test_cache_enabled(self, lifecycle_with_cache):
+        """测试缓存启用"""
+        manager = lifecycle_with_cache
 
         task = await manager.create_task(data={"test": "cache"})
 
@@ -430,10 +496,9 @@ class TestLifecycleCache:
         assert retrieved1 is retrieved2
 
     @pytest.mark.asyncio
-    async def test_cache_disabled(self):
+    async def test_cache_disabled(self, lifecycle_without_cache):
         """测试缓存禁用"""
-        repo = MemoryTaskRepository()
-        manager = TaskLifecycleManager(repo, cache_enabled=False)
+        manager = lifecycle_without_cache
 
         task = await manager.create_task(data={"test": "no_cache"})
 
@@ -441,9 +506,14 @@ class TestLifecycleCache:
         retrieved1 = await manager.get_task(task.task_id)
         retrieved2 = await manager.get_task(task.task_id)
 
-        # 应该是不同的对象
+        # 应该是不同的对象（因为存储层返回深拷贝）
         assert retrieved1 is not retrieved2
+        assert retrieved1.task_id == retrieved2.task_id
+        assert retrieved1.data == retrieved2.data
 
+
+# ========== 独立运行测试 ==========
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v", "--asyncio-mode=auto"])
+    # 使用 pytest 运行，避免事件循环问题
+    pytest.main([__file__, "-v", "--asyncio-mode=auto", "-x"])

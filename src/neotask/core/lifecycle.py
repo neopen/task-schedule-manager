@@ -34,13 +34,13 @@ class TaskLifecycleManager:
             self,
             task_repo: TaskRepository,
             event_bus: Optional[EventBus] = None,
-            cache_enabled: bool = True
+            cache_enabled: bool = True  # 添加 cache_enabled 参数
     ):
         self._task_repo = task_repo
         self._event_bus = event_bus
         self._future_manager = FutureManager()
         self._cache: Dict[str, Task] = {}
-        self._cache_enabled = cache_enabled
+        self._cache_enabled = cache_enabled  # 使用传入的参数
         self._lock = asyncio.Lock()
 
     async def create_task(
@@ -172,7 +172,7 @@ class TaskLifecycleManager:
         if not task:
             return False
 
-        debug(f"[DEBUG] Failing task {task_id}: {error}")  # 调试用
+        debug(f"[DEBUG] Failing task {task_id}: {error}")
 
         task.fail(error)
         await self._task_repo.save(task)
@@ -307,7 +307,6 @@ class TaskLifecycleManager:
         # 遍历所有任务状态，从存储获取计数
         for status in TaskStatus:
             # 获取该状态的任务数量
-            # 使用 limit=10000 获取足够多的任务，实际可根据需要调整
             tasks = await self._task_repo.list_by_status(status, limit=10000)
             count = len(tasks)
 
@@ -335,7 +334,6 @@ class TaskLifecycleManager:
         """
         cleaned_count = 0
         now = datetime.now(timezone.utc)
-        cutoff_time = now.timestamp() - 86400  # 默认清理 24 小时前的任务
 
         # 获取所有终端状态的任务
         terminal_statuses = [TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED]
@@ -346,18 +344,18 @@ class TaskLifecycleManager:
             for task in tasks:
                 # 检查是否过期
                 is_expired = False
-                age = 0
 
                 # 根据任务的 completed_at 或 created_at 判断
                 if task.completed_at:
                     # 任务已完成，检查是否超过 TTL
-                    age = (now - task.completed_at).total_seconds()
-                    if age > task.ttl:
+                    # 修复：completed_at 是 datetime，需要转换为时间戳比较
+                    age_seconds = (now - task.completed_at).total_seconds()
+                    if age_seconds > task.ttl:
                         is_expired = True
                 elif task.created_at:
                     # 任务未完成但处于终端状态（异常情况）
-                    age = (now - task.created_at).total_seconds()
-                    if age > task.ttl * 2:  # 给予双倍时间
+                    age_seconds = (now - task.created_at).total_seconds()
+                    if age_seconds > task.ttl * 2:  # 给予双倍时间
                         is_expired = True
 
                 if is_expired:
@@ -373,7 +371,7 @@ class TaskLifecycleManager:
                     await self._future_manager.remove(task.task_id)
 
                     cleaned_count += 1
-                    debug(f"Cleaned expired task: {task.task_id}, status={task.status.value}, age={age:.0f}s")
+                    debug(f"Cleaned expired task: {task.task_id}, status={task.status.value}, age={age_seconds:.0f}s")
 
         if cleaned_count > 0:
             info(f"Cleaned {cleaned_count} expired tasks")
@@ -402,15 +400,21 @@ class TaskLifecycleManager:
             for task in tasks:
                 # 检查是否超过最大存活时间
                 check_time = task.completed_at or task.created_at
-                if check_time and check_time.timestamp() < cutoff_time:
-                    await self._task_repo.delete(task.task_id)
+                if check_time:
+                    # 修复：check_time 是 datetime，需要转换为时间戳
+                    if check_time.timestamp() < cutoff_time:
+                        await self._task_repo.delete(task.task_id)
 
-                    if self._cache_enabled:
-                        async with self._lock:
-                            self._cache.pop(task.task_id, None)
+                        if self._cache_enabled:
+                            async with self._lock:
+                                self._cache.pop(task.task_id, None)
 
-                    await self._future_manager.remove(task.task_id)
-                    cleaned_count += 1
+                        await self._future_manager.remove(task.task_id)
+                        cleaned_count += 1
+                        debug(f"Cleaned old task: {task.task_id}, age={(now - check_time).total_seconds():.0f}s")
+
+        if cleaned_count > 0:
+            info(f"Cleaned {cleaned_count} old tasks by time")
 
         return cleaned_count
 
