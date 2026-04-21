@@ -45,7 +45,7 @@ from neotask.storage.factory import StorageFactory
 from neotask.queue.base import BaseQueue, QueueItem
 from neotask.queue.priority_queue import PriorityQueue
 from neotask.queue.delayed_queue import DelayedQueue
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 
 # Worker
 from neotask.worker.pool import WorkerPool, WorkerStats

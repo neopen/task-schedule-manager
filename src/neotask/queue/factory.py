@@ -6,7 +6,7 @@
 """
 
 from typing import Optional
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.base import QueueRepository
 
 

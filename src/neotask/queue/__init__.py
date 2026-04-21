@@ -8,7 +8,7 @@
 from neotask.queue.base import BaseQueue, QueueItem
 from neotask.queue.priority_queue import PriorityQueue
 from neotask.queue.delayed_queue import DelayedQueue
-from neotask.queue.scheduler import QueueScheduler, QueueSchedulerStats
+from neotask.queue.queue_scheduler import QueueScheduler, QueueSchedulerStats
 from neotask.queue.factory import QueueFactory
 
 __all__ = [

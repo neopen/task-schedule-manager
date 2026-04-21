@@ -7,7 +7,7 @@
 
 from typing import Dict, Any, Optional, Union, List
 from neotask.core.lifecycle import TaskLifecycleManager
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.models.task import TaskPriority
 
 

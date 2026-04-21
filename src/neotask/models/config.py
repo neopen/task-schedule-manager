@@ -1,6 +1,6 @@
 """
 @FileName: config.py
-@Description: 配置
+@Description: 配置 - 包含所有模块的配置类
 @Author: HiPeng
 @Time: 2026/4/1 18:23
 """
@@ -11,7 +11,7 @@ from typing import Optional, Literal
 
 @dataclass
 class StorageConfig:
-    """Storage configuration."""
+    """存储配置"""
 
     type: Literal["memory", "redis", "sqlite"] = "memory"
     redis_url: Optional[str] = None
@@ -19,23 +19,23 @@ class StorageConfig:
 
     @classmethod
     def memory(cls) -> "StorageConfig":
-        """Create memory storage config."""
+        """创建内存存储配置"""
         return cls(type="memory")
 
     @classmethod
     def redis(cls, url: str) -> "StorageConfig":
-        """Create Redis storage config."""
+        """创建Redis存储配置"""
         return cls(type="redis", redis_url=url)
 
     @classmethod
     def sqlite(cls, path: str = "tasks.db") -> "StorageConfig":
-        """Create SQLite storage config."""
+        """创建SQLite存储配置"""
         return cls(type="sqlite", sqlite_path=path)
 
 
 @dataclass
 class LockConfig:
-    """Distributed lock configuration."""
+    """分布式锁配置"""
 
     type: Literal["memory", "redis"] = "memory"
     redis_url: Optional[str] = None
@@ -45,96 +45,99 @@ class LockConfig:
 
     @classmethod
     def memory(cls) -> "LockConfig":
-        """Create memory lock config."""
+        """创建内存锁配置"""
         return cls(type="memory")
 
     @classmethod
     def redis(cls, url: str, timeout: int = 30) -> "LockConfig":
-        """Create Redis lock config."""
+        """创建Redis锁配置"""
         return cls(type="redis", redis_url=url, lock_timeout=timeout)
 
 
 @dataclass
 class WorkerConfig:
-    """Worker pool configuration."""
+    """Worker池配置"""
 
     max_concurrent: int = 10
     prefetch_size: int = 20
     min_threshold: int = 5
     task_timeout: int = 300
     retry_max: int = 3
+    retry_delay: float = 1.0
 
     @classmethod
     def default(cls) -> "WorkerConfig":
-        """Create default worker config."""
+        """创建默认Worker配置"""
         return cls()
 
     @classmethod
     def high_performance(cls) -> "WorkerConfig":
-        """Create high performance worker config."""
+        """创建高性能Worker配置"""
         return cls(max_concurrent=50, prefetch_size=100)
 
 
 @dataclass
 class QueueConfig:
-    """Queue configuration."""
+    """队列配置"""
 
     max_size: int = 1000
     priority_levels: int = 4
+    delayed_queue_check_interval: float = 0.1
 
     @classmethod
     def default(cls) -> "QueueConfig":
-        """Create default queue config."""
+        """创建默认队列配置"""
         return cls()
 
 
 @dataclass
 class WebUIConfig:
-    """Web UI configuration."""
+    """Web UI配置"""
 
-    enable: bool = False
+    enabled: bool = False
     host: str = "127.0.0.1"
     port: int = 8080
     auto_open: bool = False
     enable_websocket: bool = True
 
     @classmethod
-    def disabled(cls) -> "WebUIConfig":
-        """Create disabled web UI config."""
-        return cls(enable=False)
+    def disable(cls) -> "WebUIConfig":
+        """创建禁用Web UI配置"""
+        return cls(enabled=False)
 
     @classmethod
-    def enabled(cls, port: int = 8080, auto_open: bool = False) -> "WebUIConfig":
-        """Create enabled web UI config."""
-        return cls(enable=True, port=port, auto_open=auto_open)
+    def enable(cls, port: int = 8080, auto_open: bool = False) -> "WebUIConfig":
+        """创建启用Web UI配置"""
+        return cls(enabled=True, port=port, auto_open=auto_open)
 
 
 @dataclass
 class ExecutorConfig:
-    """Executor configuration."""
+    """执行器配置"""
 
     type: str = "async"  # async, thread, process, class, auto
     max_workers: Optional[int] = None
 
     @classmethod
     def async_executor(cls) -> "ExecutorConfig":
-        """Create async executor config."""
+        """创建异步执行器配置"""
         return cls(type="async")
 
     @classmethod
     def thread_executor(cls, max_workers: int = 10) -> "ExecutorConfig":
-        """Create thread executor config."""
+        """创建线程执行器配置"""
         return cls(type="thread", max_workers=max_workers)
 
     @classmethod
     def process_executor(cls, max_workers: int = None) -> "ExecutorConfig":
-        """Create process executor config."""
+        """创建进程执行器配置"""
         return cls(type="process", max_workers=max_workers)
 
 
 @dataclass
 class TaskPoolConfig:
     """TaskPool配置 - 专注于即时任务"""
+
     # 存储配置
     storage_type: str = "memory"
     sqlite_path: str = "neotask.db"
@@ -166,6 +169,14 @@ class TaskPoolConfig:
     max_retries: int = 3
     retry_delay: float = 1.0
 
+    # 预取配置
+    enable_prefetch: bool = True
+    prefetch_min_threshold: int = 5
+
+    # 回收配置
+    enable_reclaimer: bool = True
+    reclaimer_interval: float = 30.0
+
     # 节点标识
     node_id: str = ""
 
@@ -176,7 +187,7 @@ class TaskPoolConfig:
 
     @classmethod
     def memory(cls, node_id: Optional[str] = None) -> "TaskPoolConfig":
-        """Create memory-only config."""
+        """创建内存存储配置"""
         config = cls(storage_type="memory")
         if node_id:
             config.node_id = node_id
@@ -184,7 +195,7 @@ class TaskPoolConfig:
 
     @classmethod
     def sqlite(cls, path: str = "neotask.db", node_id: Optional[str] = None) -> "TaskPoolConfig":
-        """Create SQLite config."""
+        """创建SQLite存储配置"""
         config = cls(storage_type="sqlite", sqlite_path=path)
         if node_id:
             config.node_id = node_id
@@ -192,7 +203,7 @@ class TaskPoolConfig:
 
     @classmethod
     def redis(cls, url: str, node_id: Optional[str] = None) -> "TaskPoolConfig":
-        """Create Redis config."""
+        """创建Redis存储配置"""
         config = cls(storage_type="redis", redis_url=url)
         if node_id:
             config.node_id = node_id
@@ -202,42 +213,79 @@ class TaskPoolConfig:
 @dataclass
 class SchedulerConfig:
     """调度器配置 - 专注于定时任务"""
+
+    # 存储配置
     storage_type: str = "memory"
     sqlite_path: str = "neotask.db"
     redis_url: Optional[str] = None
 
+    # Worker配置
     worker_concurrency: int = 10
+
+    # 重试配置
     max_retries: int = 3
     retry_delay: float = 1.0
+
+    # 持久化配置
     enable_persistence: bool = False
-    scan_interval: float = 0.05
+
+    # 调度配置
+    scan_interval: float = 1.0  # 调度循环扫描间隔（秒）
+    enable_periodic_manager: bool = True  # 是否启用周期任务管理器
+    enable_time_wheel: bool = False  # 是否启用时间轮（高性能）
+    time_wheel_slots: int = 60  # 时间轮槽位数
+    time_wheel_tick: float = 1.0  # 时间轮滴答间隔（秒）
+
+    # 周期任务默认配置
+    default_max_runs: Optional[int] = None  # 默认最大执行次数
+    default_missed_policy: str = "skip"  # 默认错过执行策略: ignore, run_once, catch_up, skip
 
     @classmethod
-    def memory(cls, **kwargs) -> "SchedulerConfig":
-        """Create memory-only scheduler config."""
-        return cls(storage_type="memory", **kwargs)
+    def memory(cls) -> "SchedulerConfig":
+        """创建内存存储配置"""
+        return cls(storage_type="memory")
 
     @classmethod
-    def sqlite(cls, path: str = "neotask.db", **kwargs) -> "SchedulerConfig":
-        """Create SQLite scheduler config."""
-        return cls(storage_type="sqlite", sqlite_path=path, **kwargs)
+    def sqlite(cls, path: str = "neotask.db") -> "SchedulerConfig":
+        """创建SQLite存储配置"""
+        return cls(storage_type="sqlite", sqlite_path=path)
 
     @classmethod
-    def redis(cls, url: str, **kwargs) -> "SchedulerConfig":
-        """Create Redis scheduler config."""
-        return cls(storage_type="redis", redis_url=url, **kwargs)
+    def redis(cls, url: str) -> "SchedulerConfig":
+        """创建Redis存储配置"""
+        return cls(storage_type="redis", redis_url=url)
+
+    @classmethod
+    def high_performance(cls) -> "SchedulerConfig":
+        """创建高性能配置（启用时间轮）"""
+        return cls(
+            enable_time_wheel=True,
+            time_wheel_slots=360,
+            time_wheel_tick=1.0,
+            scan_interval=0.5
+        )
+
+    @classmethod
+    def lightweight(cls) -> "SchedulerConfig":
+        """创建轻量级配置（不启用周期任务管理器）"""
+        return cls(
+            enable_periodic_manager=False,
+            enable_time_wheel=False,
+            scan_interval=2.0
+        )
 
 
 @dataclass
 class TaskConfig:
     """统一任务配置（兼容旧版 API）"""
+
     node_id: str = ""
     storage: StorageConfig = field(default_factory=StorageConfig.memory)
     lock: LockConfig = field(default_factory=LockConfig.memory)
     worker: WorkerConfig = field(default_factory=WorkerConfig.default)
     queue: QueueConfig = field(default_factory=QueueConfig.default)
     executor: ExecutorConfig = field(default_factory=ExecutorConfig.async_executor)
-    webui: WebUIConfig = field(default_factory=WebUIConfig.disabled)
+    webui: WebUIConfig = field(default_factory=WebUIConfig.disable)
 
     def __post_init__(self):
         """Generate node ID if not provided."""
@@ -247,7 +295,7 @@ class TaskConfig:
 
     @classmethod
     def memory(cls, node_id: Optional[str] = None) -> "TaskConfig":
-        """Create memory-only config (single node)."""
+        """创建内存存储配置（单节点）"""
         config = cls()
         if node_id:
             config.node_id = node_id
@@ -255,7 +303,7 @@ class TaskConfig:
 
     @classmethod
     def redis(cls, redis_url: str, node_id: Optional[str] = None) -> "TaskConfig":
-        """Create Redis-based config (distributed)."""
+        """创建Redis存储配置（分布式）"""
         config = cls(
             storage=StorageConfig.redis(redis_url),
             lock=LockConfig.redis(redis_url),
@@ -266,7 +314,7 @@ class TaskConfig:
 
     @classmethod
     def sqlite(cls, path: str = "tasks.db", node_id: Optional[str] = None) -> "TaskConfig":
-        """Create SQLite-based config."""
+        """创建SQLite存储配置"""
         config = cls(
             storage=StorageConfig.sqlite(path),
             lock=LockConfig.memory(),
@@ -277,7 +325,13 @@ class TaskConfig:
 
     @classmethod
     def with_webui(cls, port: int = 8080, auto_open: bool = False, **kwargs) -> "TaskConfig":
-        """Create config with web UI enabled."""
+        """创建启用Web UI的配置"""
         config = cls(**kwargs)
-        config.webui = WebUIConfig.enabled(port, auto_open)
+        config.webui = WebUIConfig.enable(port, auto_open)
         return config
+
+
+# 预定义配置常量
+DEFAULT_TASK_POOL_CONFIG = TaskPoolConfig()
+DEFAULT_SCHEDULER_CONFIG = SchedulerConfig()
+DEFAULT_TASK_CONFIG = TaskConfig()

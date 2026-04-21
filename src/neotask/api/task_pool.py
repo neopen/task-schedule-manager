@@ -11,6 +11,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Dict, Any, List, Callable, Union
 
+from neotask.common.logger import error
 from neotask.core.dispatcher import TaskDispatcher
 from neotask.core.future import FutureManager
 from neotask.core.lifecycle import TaskLifecycleManager
@@ -23,7 +24,7 @@ from neotask.models.task import TaskPriority
 from neotask.monitor.health import SystemHealthChecker
 from neotask.monitor.metrics import MetricsCollector
 from neotask.monitor.reporter import ReporterManager, ConsoleReporter
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.factory import StorageFactory
 from neotask.worker.pool import WorkerPool
 from neotask.worker.supervisor import WorkerSupervisor
@@ -302,7 +303,8 @@ class TaskPool:
             future = asyncio.run_coroutine_threadsafe(shutdown_components(), self._loop)
             try:
                 future.result(timeout=timeout + 5)
-            except Exception:
+            except Exception as e:
+                error(f"Failed to stop components: {e}")
                 pass
 
             # 停止循环

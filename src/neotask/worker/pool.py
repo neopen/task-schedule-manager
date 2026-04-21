@@ -15,7 +15,7 @@ from neotask.core.lifecycle import TaskLifecycleManager
 from neotask.event.bus import EventBus, TaskEvent
 from neotask.executor.base import TaskExecutor
 from neotask.models.task import TaskStatus
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.base import TaskRepository
 
 
