@@ -149,6 +149,9 @@ class SQLiteTaskRepository(TaskRepository):
 
     async def update_status(self, task_id: str, status: TaskStatus, **kwargs) -> bool:
         await self._ensure_init()
+        if not await self.exists(task_id):
+            return False
+
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 "UPDATE tasks SET status = ? WHERE task_id = ?",
