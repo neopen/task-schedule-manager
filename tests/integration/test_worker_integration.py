@@ -9,7 +9,7 @@ import asyncio
 
 import pytest
 
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.memory import MemoryQueueRepository
 from neotask.worker.prefetcher import TaskPrefetcher, PrefetchConfig, PrefetchStrategy
 from neotask.worker.reclaimer import TaskReclaimer, ReclaimerConfig

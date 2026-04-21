@@ -17,7 +17,7 @@ from neotask.models.task import Task, TaskPriority
 from neotask.monitor.metrics import MetricsCollector
 from neotask.queue.delayed_queue import DelayedQueue
 from neotask.queue.priority_queue import PriorityQueue
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.memory import MemoryTaskRepository, MemoryQueueRepository
 from neotask.storage.sqlite import SQLiteTaskRepository, SQLiteQueueRepository
 

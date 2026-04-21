@@ -11,7 +11,7 @@ import pytest
 
 from neotask.queue.delayed_queue import DelayedQueue
 from neotask.queue.priority_queue import PriorityQueue
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.memory import MemoryQueueRepository
 
 
