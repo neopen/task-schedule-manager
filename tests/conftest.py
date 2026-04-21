@@ -2,158 +2,212 @@
 @FileName: conftest.py
 @Description: pytest 配置和共享 fixtures
 @Author: HiPeng
-@Time: 2026/4/16
+@Time: 2026/4/21
 """
 
 import asyncio
 import os
-import sys
-from typing import Dict, Any, Optional
+import tempfile
+from typing import Dict, Any
 
 import pytest
 
-# 确保可以导入 neotask
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from neotask.api.task_pool import TaskPool, TaskPoolConfig
-from neotask.api.task_scheduler import TaskScheduler, SchedulerConfig
+from neotask.event.bus import EventBus
+from neotask.models.task import Task, TaskPriority
+from neotask.monitor.metrics import MetricsCollector
+from neotask.queue.delayed_queue import DelayedQueue
+from neotask.queue.priority_queue import PriorityQueue
+from neotask.queue.scheduler import QueueScheduler
+from neotask.storage.memory import MemoryTaskRepository, MemoryQueueRepository
+from neotask.storage.sqlite import SQLiteTaskRepository, SQLiteQueueRepository
 
 
 # ========== 异步支持 ==========
 
 @pytest.fixture(scope="session")
 def event_loop():
-    """创建事件循环（session级别）"""
+    """创建事件循环"""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     yield loop
-    # 清理所有待处理的任务
-    pending = asyncio.all_tasks(loop)
-    for task in pending:
-        task.cancel()
-    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
     loop.close()
 
 
-# ========== 测试执行器 ==========
-
-async def success_executor(data: Dict[str, Any]) -> Dict[str, Any]:
-    """成功执行器"""
-    return {"result": "success", "data": data}
-
-
-async def fail_executor(data: Dict[str, Any]) -> Dict[str, Any]:
-    """失败执行器"""
-    raise ValueError("Task execution failed")
-
-
-async def slow_executor(data: Dict[str, Any]) -> Dict[str, Any]:
-    """慢速执行器"""
-    delay = data.get("delay", 0.5)
-    await asyncio.sleep(delay)
-    return {"result": "slow_success", "data": data, "delay": delay}
-
-
-async def echo_executor(data: Dict[str, Any]) -> Dict[str, Any]:
-    """回显执行器"""
-    return {"result": data}
-
-
-# ========== 存储 fixtures ==========
+# ========== 存储 Fixtures ==========
 
 @pytest.fixture
-def memory_config() -> TaskPoolConfig:
-    """内存存储配置"""
-    return TaskPoolConfig(storage_type="memory")
+def memory_task_repo():
+    """内存任务存储"""
+    return MemoryTaskRepository()
 
 
 @pytest.fixture
-def sqlite_config() -> Optional[TaskPoolConfig]:
-    """SQLite 存储配置"""
-    import tempfile
+def memory_queue_repo():
+    """内存队列存储"""
+    return MemoryQueueRepository()
+
+
+@pytest.fixture
+def sqlite_task_repo():
+    """SQLite 任务存储（临时文件）"""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
-    config = TaskPoolConfig(storage_type="sqlite", sqlite_path=db_path)
-    yield config
+
+    repo = SQLiteTaskRepository(db_path)
+    yield repo
+
     # 清理
-    if os.path.exists(db_path):
+    if hasattr(repo, 'close'):
         try:
-            os.unlink(db_path)
-        except PermissionError:
+            asyncio.create_task(repo.close())
+        except:
             pass
-
-
-@pytest.fixture(scope="session")
-def redis_url():
-    """Redis URL - session级别，只创建一次"""
-    return os.environ.get("REDIS_URL", "redis://localhost:6379/10")
+    os.unlink(db_path)
 
 
 @pytest.fixture
-def redis_config(redis_url):
-    """Redis 存储配置"""
-    return TaskPoolConfig(storage_type="redis", redis_url=redis_url)
+def sqlite_queue_repo():
+    """SQLite 队列存储（临时文件）"""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+
+    repo = SQLiteQueueRepository(db_path)
+    yield repo
+
+    os.unlink(db_path)
 
 
-# ========== TaskPool fixtures ==========
-
-@pytest.fixture
-def memory_task_pool(memory_config):
-    """内存 TaskPool"""
-    pool = TaskPool(executor=success_executor, config=memory_config)
-    pool.start()
-    yield pool
-    pool.shutdown()
-    # 给时间让连接关闭
-    import asyncio
-    asyncio.sleep(0.1)
-
+# ========== 队列 Fixtures ==========
 
 @pytest.fixture
-def task_pool_with_fail_executor(memory_config):
-    """使用失败执行器的 TaskPool"""
-    pool = TaskPool(executor=fail_executor, config=memory_config)
-    pool.start()
-    yield pool
-    pool.shutdown()
+def priority_queue():
+    """优先级队列"""
+    return PriorityQueue()
 
 
 @pytest.fixture
-def task_pool_with_slow_executor(memory_config):
-    """使用慢速执行器的 TaskPool"""
-    pool = TaskPool(executor=slow_executor, config=memory_config)
-    pool.start()
-    yield pool
-    pool.shutdown()
+def priority_queue_with_repo(memory_queue_repo):
+    """带存储的优先级队列"""
+    return PriorityQueue(memory_queue_repo)
 
-
-# ========== TaskScheduler fixtures ==========
 
 @pytest.fixture
-def memory_scheduler(memory_config):
-    """内存 TaskScheduler"""
-    scheduler_config = SchedulerConfig.memory()
-    scheduler = TaskScheduler(executor=success_executor, config=scheduler_config)
-    scheduler.start()
-    yield scheduler
-    scheduler.shutdown()
+def delayed_queue():
+    """延迟队列"""
+    return DelayedQueue()
+
+
+@pytest.fixture
+def queue_scheduler(memory_queue_repo):
+    """队列调度器"""
+    return QueueScheduler(memory_queue_repo, max_size=1000)
+
+
+# ========== 事件总线 Fixtures ==========
+
+@pytest.fixture
+async def event_bus():
+    """事件总线（异步 fixture）"""
+    bus = EventBus()
+    await bus.start()
+    yield bus
+    await bus.stop()
+
+
+# ========== 指标收集 Fixtures ==========
+
+@pytest.fixture
+def metrics_collector():
+    """指标收集器"""
+    return MetricsCollector(window_size=100)
+
+
+# ========== 测试任务 Fixtures ==========
+
+@pytest.fixture
+def sample_task():
+    """示例任务"""
+    return Task(
+        task_id="test_task_001",
+        data={"key": "value", "test": True},
+        priority=TaskPriority.NORMAL
+    )
+
+
+@pytest.fixture
+def sample_tasks():
+    """多个示例任务"""
+    return [
+        Task(
+            task_id=f"test_task_{i:03d}",
+            data={"index": i, "data": f"task_{i}"},
+            priority=TaskPriority(i % 4)
+        )
+        for i in range(10)
+    ]
+
+
+@pytest.fixture
+def sample_task_data():
+    """示例任务数据"""
+    return [
+        (f"task_{i}", i % 4, 0)  # (task_id, priority, delay)
+        for i in range(20)
+    ]
 
 
 # ========== 辅助函数 ==========
-def has_redis():
-    """检查 Redis 是否可用"""
-    try:
-        import redis
 
-        client = redis.Redis.from_url("redis://localhost:6379", decode_responses=True)
-        client.ping()
-        client.close()
-        return True
-    except Exception as e:
-        print(f"Redis connection failed: {e}")
-        return False
+def create_test_executor():
+    """创建测试执行器"""
 
-skip_if_no_redis = pytest.mark.skipif(
-    not has_redis(),
-    reason="Redis not available"
-)
+    async def executor(data: Dict[str, Any]) -> Dict[str, Any]:
+        return {"result": "processed", "data": data}
+
+    return executor
+
+
+# ========== 参数化数据 ==========
+
+@pytest.fixture(params=["memory", "sqlite"])
+def storage_type(request):
+    """参数化存储类型"""
+    return request.param
+
+
+@pytest.fixture
+def task_repo_factory():
+    """任务存储工厂"""
+
+    def _create(storage_type: str):
+        if storage_type == "memory":
+            return MemoryTaskRepository()
+        elif storage_type == "sqlite":
+            with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+                db_path = f.name
+            repo = SQLiteTaskRepository(db_path)
+            repo._cleanup = lambda: os.unlink(db_path)
+            return repo
+        else:
+            raise ValueError(f"Unknown storage type: {storage_type}")
+
+    return _create
+
+
+@pytest.fixture
+def queue_repo_factory():
+    """队列存储工厂"""
+
+    def _create(storage_type: str):
+        if storage_type == "memory":
+            return MemoryQueueRepository()
+        elif storage_type == "sqlite":
+            with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+                db_path = f.name
+            repo = SQLiteQueueRepository(db_path)
+            repo._cleanup = lambda: os.unlink(db_path)
+            return repo
+        else:
+            raise ValueError(f"Unknown storage type: {storage_type}")
+
+    return _create
