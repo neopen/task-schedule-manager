@@ -8,7 +8,7 @@
 import asyncio
 import random
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 
 from neotask.common.exceptions import TaskNotFoundError, TaskAlreadyExistsError
 from neotask.common.logger import debug, warning, info
@@ -47,12 +47,18 @@ class TaskLifecycleManager:
             self,
             data: Dict[str, Any],
             task_id: Optional[str] = None,
-            priority: TaskPriority = TaskPriority.NORMAL,
+            priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
             node_id: str = "default",
             ttl: int = 3600
     ) -> Task:
         """创建任务"""
         task_id = task_id or self._generate_task_id()
+
+        # 转换优先级为 TaskPriority 枚举
+        if isinstance(priority, int):
+            priority_enum = TaskPriority(priority)
+        else:
+            priority_enum = priority
 
         # 检查是否已存在
         existing = await self._task_repo.get(task_id)
@@ -62,7 +68,7 @@ class TaskLifecycleManager:
         task = Task(
             task_id=task_id,
             data=data,
-            priority=priority,
+            priority=priority_enum,
             node_id=node_id,
             ttl=ttl
         )

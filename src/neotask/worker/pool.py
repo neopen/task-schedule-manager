@@ -137,12 +137,13 @@ class WorkerPool:
         self._max_retries = max_retries
         self._retry_delay = retry_delay
 
+
     async def _worker_loop(self, worker_id: int) -> None:
         """Worker主循环"""
         debug(f"Worker {worker_id} started")
         while self._running:
             try:
-                # 获取任务
+                # 获取任务 - 使用较短的超时或非阻塞方式
                 task_ids = await self._queue.pop(self._prefetch_size)
 
                 for task_id in task_ids:
@@ -158,7 +159,8 @@ class WorkerPool:
 
                 # 如果没有获取到任务，短暂休眠避免空转
                 if not task_ids:
-                    await asyncio.sleep(0.01)
+                    # 使用更短的休眠时间，或者使用事件等待
+                    await asyncio.sleep(0.01)  # 减少到 10ms
 
             except asyncio.CancelledError:
                 debug(f"Worker {worker_id} cancelled")

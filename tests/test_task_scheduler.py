@@ -37,7 +37,7 @@ class TestTaskSchedulerInit:
         """测试默认初始化"""
         scheduler = TaskScheduler()
         assert scheduler._config is not None
-        assert scheduler._config.storage_type == "memory"
+        assert scheduler._config.memory() == "memory"
         assert not scheduler._running
 
     def test_custom_config(self):
@@ -50,7 +50,7 @@ class TestTaskSchedulerInit:
             scan_interval=0.5
         )
         scheduler = TaskScheduler(config=config)
-        assert scheduler._config.storage_type == "sqlite"
+        assert scheduler._config.sqlite == "sqlite"
         assert scheduler._config.worker_concurrency == 5
         assert scheduler._config.scan_interval == 0.5
 

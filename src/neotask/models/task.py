@@ -27,8 +27,12 @@ class TaskStatus(Enum):
         return self in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED)
 
 
-class TaskPriority(Enum):
-    """Task priority enumeration."""
+class TaskPriority(int, Enum):
+    """Task priority enumeration.
+
+    继承自 int，可以直接作为整数使用。
+    数字越小优先级越高。
+    """
 
     CRITICAL = 0
     HIGH = 1
@@ -54,7 +58,7 @@ class Task:
     priority: TaskPriority = TaskPriority.NORMAL
     node_id: str = ""
     retry_count: int = 0
-    ttl: int = 3600  # Time to live in seconds
+    ttl: int = 3600
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -67,7 +71,7 @@ class Task:
             "task_id": self.task_id,
             "data": json.dumps(self.data),
             "status": self.status.value,
-            "priority": self.priority.value,
+            "priority": self.priority.value,  # 获取整数值
             "node_id": self.node_id,
             "retry_count": self.retry_count,
             "ttl": self.ttl,
@@ -87,11 +91,16 @@ class Task:
                 return None
             return datetime.fromisoformat(value)
 
+        # 处理 priority：可能是 int 或 string
+        priority_value = data.get("priority", 2)
+        if isinstance(priority_value, str):
+            priority_value = int(priority_value)
+
         return cls(
             task_id=data["task_id"],
             data=json.loads(data["data"]),
             status=TaskStatus(data["status"]),
-            priority=TaskPriority(data.get("priority", 2)),
+            priority=TaskPriority(priority_value),
             node_id=data.get("node_id", ""),
             retry_count=int(data.get("retry_count", 0)),
             ttl=int(data.get("ttl", 3600)),
@@ -129,10 +138,6 @@ class Task:
         """Check if task is in terminal state."""
         return self.status.is_terminal()
 
-    def is_retriable(self) -> bool:
-        """Check if task can be retried."""
-        return self.status == TaskStatus.FAILED and self.retry_count < 3
-
 
 class TaskStats:
     """Task statistics container."""
@@ -156,7 +161,7 @@ class TaskStats:
     @property
     def success_rate(self) -> float:
         """Calculate success rate."""
-        total = self.completed + self.failed
-        if total == 0:
+        total_completed = self.completed + self.failed
+        if total_completed == 0:
             return 1.0
-        return self.completed / total
+        return self.completed / total_completed
