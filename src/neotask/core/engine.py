@@ -16,7 +16,7 @@ from neotask.storage.base import TaskRepository, QueueRepository
 from neotask.storage.factory import StorageFactory
 from neotask.executor.factory import ExecutorFactory
 from neotask.executor.base import TaskExecutor
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.worker.pool import WorkerPool
 from neotask.worker.supervisor import WorkerSupervisor
 from neotask.event.bus import EventBus

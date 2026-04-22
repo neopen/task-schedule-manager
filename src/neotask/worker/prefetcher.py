@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from enum import Enum
 
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 
 
 class PrefetchStrategy(Enum):

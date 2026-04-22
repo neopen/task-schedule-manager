@@ -14,7 +14,7 @@ from datetime import datetime
 
 from neotask.models.task import Task, TaskStatus
 from neotask.storage.base import TaskRepository
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.lock.base import TaskLock
 from neotask.lock.scanner import LockScanner, LockScannerConfig
 from neotask.event.bus import EventBus, TaskEvent

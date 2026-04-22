@@ -1,5 +1,5 @@
 """
-@FileName: scheduler.py
+@FileName: queue_scheduler.py
 @Description: 队列调度器 - 整合优先级队列和延迟队列
 @Author: HiPeng
 @Time: 2026/4/8 00:00
@@ -10,6 +10,7 @@ import time
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 
+from neotask.common.logger import debug
 from neotask.queue.delayed_queue import DelayedQueue
 from neotask.queue.priority_queue import PriorityQueue
 from neotask.storage.base import QueueRepository
@@ -52,7 +53,18 @@ class QueueScheduler:
         if self._started:
             return
         self._started = True
-        await self._delayed_queue.start(self._on_delayed_task_ready)
+
+        # 包装回调以匹配 delayed_queue 期望的签名 (task_id, priority, data)
+        async def wrapped_callback(task_id: str, priority: int, data: Dict = None):
+            await self._on_delayed_task_ready(task_id, priority, data)
+
+        await self._delayed_queue.start(wrapped_callback)
+
+    async def _on_delayed_task_ready(self, task_id: str, priority: int, data: Dict = None) -> None:
+        """延迟任务到期回调"""
+        debug(f"[QUEUE_SCHEDULER] Delayed task ready: {task_id}, priority={priority}")
+        if not self._disabled:
+            await self._priority_queue.push(task_id, priority)
 
     async def stop(self) -> None:
         """停止调度器"""
@@ -70,6 +82,7 @@ class QueueScheduler:
         Returns:
             是否成功入队
         """
+        debug(f"[QUEUE_SCHEDULER] push: task_id={task_id}, priority={priority}, delay={delay}")
         if self._disabled:
             return False
 
@@ -102,6 +115,7 @@ class QueueScheduler:
 
     async def pop(self, count: int = 1) -> List[str]:
         """弹出任务"""
+        debug(f"[QUEUE_SCHEDULER] pop called, paused={self._paused}, disabled={self._disabled}")  # 调试
         if self._paused or self._disabled:
             return []
 
@@ -218,10 +232,6 @@ class QueueScheduler:
             "started": self._started
         }
 
-    async def _on_delayed_task_ready(self, task_id: str, priority: int) -> None:
-        """延迟任务到期回调"""
-        if not self._disabled:
-            await self._priority_queue.push(task_id, priority)
 
     @property
     def is_paused(self) -> bool:

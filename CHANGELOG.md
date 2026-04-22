@@ -1,0 +1,395 @@
+# Changelog
+
+所有重要的项目更改都将记录在此文件中。
+
+格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
+本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+
+## [Unreleased]
+
+### 计划中 (v0.4+)
+- **分布式核心**
+  - Redis 共享队列支持
+  - 分布式锁实现
+  - 预取机制优化
+- **高可用保障**
+  - 看门狗续期机制
+  - 超时检测
+  - 故障自动恢复
+- **任务编排**
+  - DAG 工作流引擎
+  - 条件分支执行
+  - 并行任务编排
+- **企业级功能**
+  - 独立 Web UI 监控面板
+  - Prometheus 指标集成
+  - 多租户隔离支持
+
+---
+
+## [0.3.0] - 2026-04-22
+
+### 新增功能
+
+#### 定时任务调度器 (`TaskScheduler`)
+- **延时任务** (`submit_delayed`) - 支持指定延迟秒数后执行
+- **定时任务** (`submit_at`) - 支持指定具体时间点执行
+- **周期任务** (`submit_interval`) - 支持固定间隔重复执行
+- **Cron 任务** (`submit_cron`) - 支持标准 5 字段 Cron 表达式
+- 任务暂停/恢复 (`pause_periodic` / `resume_periodic`)
+- 任务取消 (`cancel_periodic`)
+- 周期任务列表查询 (`get_periodic_tasks`)
+- 优雅关闭支持
+
+#### 延迟队列 (`DelayedQueue`)
+- 独立的时间堆实现
+- 自动到期触发机制
+- 任务取消支持
+- 批量调度支持
+- 统计信息收集
+
+#### Cron 表达式解析器 (`CronParser`)
+- 标准 5 字段 Cron 语法支持（分钟、小时、日、月、周）
+- 特殊字符支持：`*`（任意）、`,`（列表）、`-`（范围）、`/`（步长）
+- 预定义表达式：`@yearly`、`@monthly`、`@weekly`、`@daily`、`@hourly`
+- 获取下次执行时间 (`next`)
+- 获取上次执行时间 (`previous`)
+- 批量获取多次执行时间 (`get_next_n`)
+- 表达式验证 (`is_valid`)
+- 中文描述生成 (`describe`)
+
+#### 时间轮 (`TimeWheel`)
+- 高性能定时器实现
+- 多轮调度支持（大延迟任务）
+- 槽位数量可配置
+- 滴答间隔可配置
+- 任务取消支持
+
+#### 周期任务管理器 (`PeriodicTaskManager`)
+- 周期任务完整生命周期管理
+- 固定间隔和 Cron 两种调度模式
+- 最大执行次数限制 (`max_runs`)
+- 时间范围限制 (`start_at` / `end_at`)
+- 错过执行策略 (`MissedExecutionPolicy`)
+  - `IGNORE` - 忽略错过的执行
+  - `RUN_ONCE` - 只执行一次（不追赶）
+  - `CATCH_UP` - 追赶所有错过的执行
+  - `SKIP` - 跳过错过的执行
+- 任务更新 (`update_task`)
+- 任务暂停/恢复 (`pause` / `resume`)
+- 任务删除 (`delete_task`)
+- 标签过滤和分页查询 (`list_tasks`)
+- 执行历史记录 (`get_execution_history`)
+
+#### 配置增强
+- 新增 `SchedulerConfig` 配置类
+  - `scan_interval` - 调度循环扫描间隔
+  - `enable_periodic_manager` - 是否启用周期任务管理器
+  - `enable_time_wheel` - 是否启用时间轮
+  - `time_wheel_slots` - 时间轮槽位数
+  - `time_wheel_tick` - 时间轮滴答间隔
+  - `default_max_runs` - 默认最大执行次数
+  - `default_missed_policy` - 默认错过执行策略
+- 预设配置工厂方法
+  - `high_performance()` - 高性能配置（启用时间轮）
+  - `lightweight()` - 轻量级配置（禁用周期管理器）
+
+### 改进
+- 优化 `TaskScheduler` 与 `TaskPool` 的委托关系
+- 完善事件循环处理，支持混合线程/异步场景
+- 增强 Cron 表达式中月末(`L`)和星期(`#`)支持
+- 改进延迟队列的调度精度
+- 统一配置类命名和结构
+- 完善异常处理和错误信息
+
+### 文档
+- 新增定时任务使用示例
+  - `examples/05_cron_tasks.py` - Cron 任务示例
+  - `examples/06_delayed_tasks.py` - 延时任务示例
+  - `examples/08_periodic.py` - 周期任务示例
+- 更新 README 添加 TaskScheduler API 说明
+- 补充架构演进路线图
+- 新增 API 参考文档
+
+### 测试
+- 新增 Cron 表达式解析器单元测试 (`test_cron_parser.py`)
+- 新增延迟队列功能测试 (`test_delayed_queue.py`)
+- 新增时间轮单元测试 (`test_time_wheel.py`)
+- 新增周期任务管理器测试 (`test_periodic_manager.py`)
+- 新增 TaskScheduler 集成测试 (`test_task_scheduler.py`)
+- 测试覆盖率提升至 85%+
+
+### 修复
+- 修复事件循环嵌套导致的 `RuntimeError`
+- 修复 `_periodic_tasks` 缺失问题
+- 修复 `_execute_periodic_task` 参数传递错误
+- 修复调度线程中事件循环处理
+
+---
+
+## [0.2.0] - 2026-04-15
+
+### 新增功能
+- **事件总线系统** (`EventBus`)
+  - 支持任务生命周期事件监听
+  - 内置事件类型：created, started, completed, failed, cancelled
+  - 异步事件处理器注册
+  - 全局事件订阅支持
+  
+- **指标收集器** (`MetricsCollector`)
+  - 实时任务统计（总数、成功数、失败数、取消数）
+  - 执行时间统计（平均值、P95）
+  - 排队时间统计
+  - Worker 池状态监控
+  - 队列长度跟踪
+  
+- **健康检查** (`HealthChecker` / `SystemHealthChecker`)
+  - 系统资源监控（CPU、内存、磁盘）
+  - Worker 存活检测
+  - 存储后端可用性检查
+  - 队列健康状态检查
+  - 健康状态聚合 (`HEALTHY` / `DEGRADED` / `UNHEALTHY`)
+
+- **指标报告器**
+  - 控制台输出 (`ConsoleReporter`)
+  - 文件日志 (`FileReporter`)
+  - Prometheus 导出 (`PrometheusReporter`)
+  - 报告管理器 (`ReporterManager`)
+
+- **分布式锁** (`LockFactory`)
+  - 内存锁实现 (`MemoryLock`)
+  - Redis 分布式锁 (`RedisLock`)
+  - 看门狗自动续期机制 (`WatchDog`)
+  - 锁管理器 (`LockManager`)
+  - 上下文管理器支持 (`async with lock.lock()`)
+
+### 改进
+- 重构 Worker 池管理逻辑
+- 优化优先级队列性能
+- 增强 SQLite 存储的事务处理
+- 改进日志格式和输出
+- 完善类型注解覆盖
+
+### 文档
+- 新增事件回调使用示例 (`examples/04_events.py`)
+- 补充监控和可观测性文档
+- 更新架构图展示新组件
+- 新增配置说明文档
+
+### 修复
+- 修复任务取消时的资源泄漏问题
+- 修复并发场景下的竞态条件
+- 修复 SQLite 连接未正确关闭的问题
+- 修复指标收集器线程安全问题
+
+---
+
+## [0.1.0] - 2026-04-08
+
+### 初始发布
+
+#### 核心任务池 (`TaskPool`)
+- 异步任务提交和执行
+- 优先级队列支持（0: CRITICAL, 1: HIGH, 2: NORMAL, 3: LOW）
+- 多 Worker 并发处理
+- 任务状态追踪（PENDING, RUNNING, SUCCESS, FAILED, CANCELLED, SCHEDULED）
+- 任务结果存储和查询
+- 任务取消支持
+
+#### 存储后端
+- **内存存储** (`MemoryTaskRepository` / `MemoryQueueRepository`)
+  - 适合开发和测试环境
+  - 零配置，高性能
+- **SQLite 存储** (`SQLiteTaskRepository` / `SQLiteQueueRepository`)
+  - 单机持久化
+  - 支持事务
+  - 自动创建索引
+- **Redis 存储** (`RedisTaskRepository` / `RedisQueueRepository`)
+  - 分布式共享队列
+  - 连接池支持
+  - Lua 脚本原子操作
+
+#### 任务执行器
+- **异步执行器** (`AsyncExecutor`) - 直接执行异步函数
+- **线程执行器** (`ThreadExecutor`) - 线程池执行同步函数
+- **进程执行器** (`ProcessExecutor`) - 进程池执行 CPU 密集型任务
+- **回调执行器** (`CallbackExecutor`) - 包装普通函数
+- 执行器工厂 (`ExecutorFactory`) - 自动选择执行器类型
+
+#### Worker 管理
+- 动态 Worker 池 (`WorkerPool`)
+- 任务预取机制 (`prefetch_size`)
+- Worker 监督者 (`WorkerSupervisor`)
+  - 健康检查
+  - 自动重启故障 Worker
+  - 失败率监控
+- 重试机制（可配置次数和延迟）
+
+#### 队列系统
+- **优先级队列** (`PriorityQueue`) - 基于堆实现
+- **延迟队列** (`DelayedQueue`) - 基于时间堆
+- **队列调度器** (`QueueScheduler`) - 整合两种队列
+- 暂停/恢复支持
+- 队列清空等待
+
+#### 辅助功能
+- Future 异步结果等待 (`TaskFuture` / `FutureManager`)
+- 任务上下文 (`TaskContext`) - 链路追踪
+- 事件总线基础框架
+- 异常体系 (`TaskSchedulerError` 系列)
+
+#### Web UI（可选）
+- FastAPI 后端服务
+- 实时任务监控面板
+- WebSocket 实时推送
+- 任务控制操作（取消、重试）
+
+#### 配置类
+- `StorageConfig` - 存储配置
+- `LockConfig` - 锁配置
+- `WorkerConfig` - Worker 配置
+- `QueueConfig` - 队列配置
+- `ExecutorConfig` - 执行器配置
+- `WebUIConfig` - Web UI 配置
+- `TaskPoolConfig` - TaskPool 配置
+- `TaskConfig` - 统一配置（兼容旧版）
+
+### 示例代码
+- `examples/00_quick_start.py` - 快速入门
+- `examples/01_simple.py` - 基础用法
+- `examples/02_context_manager.py` - 上下文管理器
+- `examples/03_priority.py` - 优先级调度
+- `examples/04_events.py` - 事件回调
+- `examples/05_cron_tasks.py` - Cron 任务
+- `examples/06_delayed_tasks.py` - 延时任务
+- `examples/07_batch.py` - 批量任务处理
+- `examples/08_periodic.py` - 周期任务
+- `examples/09_retry_and_cancel.py` - 重试和取消
+- `examples/10_task_query.py` - 任务查询
+- `examples/99_all_features.py` - 全功能演示
+
+---
+
+## 版本说明
+
+### 版本号规则
+- **主版本号** (MAJOR)：不兼容的 API 修改
+- **次版本号** (MINOR)：向下兼容的功能性新增
+- **修订号** (PATCH)：向下兼容的问题修正
+
+### 符号说明
+- `新增` - 新功能或组件
+- `改进` - 现有功能的优化
+- `修复` - Bug 修复
+- `变更` - 破坏性变更（会在升级指南中详细说明）
+- `废弃` - 即将移除的功能
+- `移除` - 已移除的功能
+- `安全` - 安全相关的修复
+
+---
+
+## 升级指南
+
+### 从 0.2.x 升级到 0.3.0
+
+#### 新增依赖
+如果使用定时任务功能，无需额外依赖。Cron 解析器为纯 Python 实现。
+
+#### API 变更
+无破坏性变更，完全向后兼容。
+
+#### 迁移步骤
+
+```python
+# 1. 导入新的调度器
+from neotask import TaskScheduler
+
+# 2. 创建调度器实例（与 TaskPool 类似）
+scheduler = TaskScheduler(executor=your_executor)
+
+# 3. 使用新的定时任务方法
+# 延时任务
+scheduler.submit_delayed(data, delay_seconds=60)
+
+# 周期任务
+scheduler.submit_interval(data, interval_seconds=300)
+
+# Cron 任务
+scheduler.submit_cron(data, "0 9 * * *")
+
+# 4. 周期任务管理
+scheduler.pause_periodic(task_id)
+scheduler.resume_periodic(task_id)
+scheduler.cancel_periodic(task_id)
+
+# 5. 查询周期任务
+tasks = scheduler.get_periodic_tasks()
+task = scheduler.get_periodic_task(task_id)
+```
+
+
+
+#### 配置迁移
+
+```python
+# 旧配置（0.2.x）- 无变化
+config = TaskPoolConfig(storage_type="memory")
+
+# 新配置（0.3.x）- 可选使用 SchedulerConfig
+from neotask.models.config import SchedulerConfig
+
+scheduler_config = SchedulerConfig(
+    scan_interval=1.0,
+    enable_periodic_manager=True,
+    enable_time_wheel=False
+)
+scheduler = TaskScheduler(executor=executor, config=scheduler_config)
+```
+
+
+
+### 从 0.1.x 升级到 0.2.0
+
+#### 新增依赖
+
+如果使用 Redis 分布式锁，需要安装：
+
+```bash
+pip install neotask[redis]
+```
+
+
+
+#### API 变更
+
+无破坏性变更，事件总线和监控组件为可选功能。
+
+#### 迁移步骤
+
+```python
+# 1. 注册事件处理器（可选）
+pool.on_completed(async def on_complete(event): ...)
+
+# 2. 启用指标收集（可选）
+from neotask.monitor import MetricsCollector
+collector = MetricsCollector()
+
+# 3. 使用分布式锁（可选）
+from neotask.lock import LockFactory
+lock = LockFactory.create_redis("redis://localhost:6379")
+```
+
+
+
+------
+
+## 贡献者
+
+感谢以下贡献者对项目的支持：
+
+- **HiPeng** - 项目创始人和维护者
+- 欢迎更多开发者参与贡献！
+
+------
+
+**注意**: 对于更详细的提交历史，请查看 [GitHub Releases](https://github.com/neopen/neotask/releases) 或 Git 提交记录。

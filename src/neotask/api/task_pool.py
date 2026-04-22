@@ -11,6 +11,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Dict, Any, List, Callable, Union
 
+from neotask.common.logger import error
 from neotask.core.dispatcher import TaskDispatcher
 from neotask.core.future import FutureManager
 from neotask.core.lifecycle import TaskLifecycleManager
@@ -23,7 +24,7 @@ from neotask.models.task import TaskPriority
 from neotask.monitor.health import SystemHealthChecker
 from neotask.monitor.metrics import MetricsCollector
 from neotask.monitor.reporter import ReporterManager, ConsoleReporter
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.factory import StorageFactory
 from neotask.worker.pool import WorkerPool
 from neotask.worker.supervisor import WorkerSupervisor
@@ -231,8 +232,12 @@ class TaskPool:
 
         # 创建独立的事件循环线程
         def run_loop():
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
+            # 创建新的事件循环
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            # 保存到实例属性（使用普通变量，不是 typing 类型）
+            self._loop = loop
 
             # 启动组件
             async def start_components():
@@ -247,8 +252,8 @@ class TaskPool:
                     self._reporter_manager.set_metrics_callback(self.get_stats)
                     await self._reporter_manager.start()
 
-            self._loop.run_until_complete(start_components())
-            self._loop.run_forever()
+            loop.run_until_complete(start_components())
+            loop.run_forever()
 
         self._loop_thread = threading.Thread(target=run_loop, daemon=True)
         self._loop_thread.start()
@@ -302,7 +307,8 @@ class TaskPool:
             future = asyncio.run_coroutine_threadsafe(shutdown_components(), self._loop)
             try:
                 future.result(timeout=timeout + 5)
-            except Exception:
+            except Exception as e:
+                error(f"Failed to stop components: {e}")
                 pass
 
             # 停止循环

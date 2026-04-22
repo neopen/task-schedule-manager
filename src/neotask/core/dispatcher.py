@@ -7,8 +7,9 @@
 
 from typing import Dict, Any, Optional, Union, List
 from neotask.core.lifecycle import TaskLifecycleManager
-from neotask.queue.scheduler import QueueScheduler
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.models.task import TaskPriority
+from neotask.common.logger import debug
 
 
 class TaskDispatcher:
@@ -40,7 +41,7 @@ class TaskDispatcher:
         priority: Union[int, TaskPriority] = TaskPriority.NORMAL,
         delay: float = 0,
         ttl: int = 3600
-    ):
+    ) -> str:
         """分发任务
 
         Args:
@@ -51,13 +52,15 @@ class TaskDispatcher:
             ttl: 任务超时时间（秒）
 
         Returns:
-            创建的Task对象或task_id
+            task_id
         """
-        # 转换优先级
+        # 确保 priority 是 TaskPriority 枚举
         if isinstance(priority, int):
-            priority_enum = TaskPriority.from_value(priority)
+            priority_enum = TaskPriority(priority)
         else:
             priority_enum = priority
+
+        debug(f"Dispatching task: task_id={task_id}, priority={priority_enum.value}, delay={delay}")
 
         # 创建任务
         task = await self._lifecycle.create_task(
@@ -68,15 +71,18 @@ class TaskDispatcher:
             ttl=ttl
         )
 
+        # 获取优先级整数值用于队列
+        priority_value = task.priority.value
+
         # 如果是延迟任务，使用延迟队列
         if delay > 0:
-            # 使用 push 方法传入 delay 参数
-            await self._queue.push(task.task_id, priority_enum.value, delay)
+            await self._queue.schedule_delayed(task.task_id, priority_value, delay)
         else:
             # 立即入队
-            await self._queue.push(task.task_id, priority_enum.value)
+            await self._queue.push(task.task_id, priority_value)
 
-        return task
+        debug(f"Task {task.task_id} dispatched successfully")
+        return task.task_id
 
     async def dispatch_batch(
         self,
@@ -86,8 +92,8 @@ class TaskDispatcher:
         """批量分发任务"""
         task_ids = []
         for task_data in tasks:
-            task = await self.dispatch(task_data, priority=priority)
-            task_ids.append(task.task_id if hasattr(task, 'task_id') else task)
+            task_id = await self.dispatch(task_data, priority=priority)
+            task_ids.append(task_id)
         return task_ids
 
     async def redispatch(self, task_id: str, delay: float = 0) -> bool:
@@ -96,9 +102,12 @@ class TaskDispatcher:
         if not task:
             return False
 
+        # 获取优先级整数值
+        priority_value = task.priority.value
+
         if delay > 0:
-            await self._queue.push(task_id, task.priority.value, delay)
+            await self._queue.schedule_delayed(task_id, priority_value, delay)
         else:
-            await self._queue.push(task_id, task.priority.value)
+            await self._queue.push(task_id, priority_value)
 
         return True
