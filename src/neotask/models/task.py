@@ -14,7 +14,6 @@ import json
 
 class TaskStatus(Enum):
     """Task status enumeration."""
-
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -27,13 +26,8 @@ class TaskStatus(Enum):
         return self in (TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.CANCELLED)
 
 
-class TaskPriority(int, Enum):
-    """Task priority enumeration.
-
-    继承自 int，可以直接作为整数使用。
-    数字越小优先级越高。
-    """
-
+class TaskPriority(Enum):
+    """Task priority enumeration."""
     CRITICAL = 0
     HIGH = 1
     NORMAL = 2
@@ -66,48 +60,53 @@ class Task:
     error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for storage."""
+        """Convert to dictionary for storage - 修复 None 值问题"""
         return {
             "task_id": self.task_id,
-            "data": json.dumps(self.data),
+            "data": json.dumps(self.data) if self.data is not None else "{}",
             "status": self.status.value,
-            "priority": self.priority.value,  # 获取整数值
-            "node_id": self.node_id,
+            "priority": self.priority.value,
+            "node_id": self.node_id or "",
             "retry_count": self.retry_count,
             "ttl": self.ttl,
-            "created_at": self.created_at.isoformat(),
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
-            "result": json.dumps(self.result) if self.result else None,
-            "error": self.error,
+            "created_at": self.created_at.isoformat() if self.created_at else datetime.now(timezone.utc).isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else "",
+            "completed_at": self.completed_at.isoformat() if self.completed_at else "",
+            "result": json.dumps(self.result) if self.result is not None else "",
+            "error": self.error or "",
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Task":
         """Create task from dictionary."""
-
         def parse_datetime(value: Optional[str]) -> Optional[datetime]:
             if not value:
                 return None
-            return datetime.fromisoformat(value)
+            try:
+                return datetime.fromisoformat(value)
+            except (ValueError, TypeError):
+                return None
 
-        # 处理 priority：可能是 int 或 string
-        priority_value = data.get("priority", 2)
-        if isinstance(priority_value, str):
-            priority_value = int(priority_value)
+        def parse_json(value: Optional[str]) -> Any:
+            if not value:
+                return None
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                return None
 
         return cls(
-            task_id=data["task_id"],
-            data=json.loads(data["data"]),
-            status=TaskStatus(data["status"]),
-            priority=TaskPriority(priority_value),
+            task_id=data.get("task_id", ""),
+            data=parse_json(data.get("data")) or {},
+            status=TaskStatus(data.get("status", "pending")),
+            priority=TaskPriority(int(data.get("priority", 2))),
             node_id=data.get("node_id", ""),
             retry_count=int(data.get("retry_count", 0)),
             ttl=int(data.get("ttl", 3600)),
-            created_at=parse_datetime(data["created_at"]) or datetime.now(timezone.utc),
+            created_at=parse_datetime(data.get("created_at")) or datetime.now(timezone.utc),
             started_at=parse_datetime(data.get("started_at")),
             completed_at=parse_datetime(data.get("completed_at")),
-            result=json.loads(data["result"]) if data.get("result") else None,
+            result=parse_json(data.get("result")),
             error=data.get("error"),
         )
 
@@ -137,6 +136,10 @@ class Task:
     def is_terminal(self) -> bool:
         """Check if task is in terminal state."""
         return self.status.is_terminal()
+
+    def is_retriable(self) -> bool:
+        """Check if task can be retried."""
+        return self.status == TaskStatus.FAILED and self.retry_count < 3
 
 
 class TaskStats:
