@@ -34,7 +34,32 @@ if sys.platform == "win32":
 
 
 @pytest.fixture(scope="session")
+def event_loop_policy():
+    """设置事件循环策略"""
+    import asyncio
+    if hasattr(asyncio, "WindowsSelectorEventLoopPolicy"):
+        # Windows 下使用 SelectorEventLoop
+        return asyncio.WindowsSelectorEventLoopPolicy()
+    return asyncio.get_event_loop_policy()
+
+
+@pytest.fixture(scope="function")
 def event_loop():
+    """为每个测试函数创建独立的事件循环"""
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    # 清理待处理的任务
+    pending = asyncio.all_tasks(loop)
+    for task in pending:
+        task.cancel()
+    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+    loop.close()
+
+
+@pytest.fixture(scope="session")
+def event_loop2():
     """创建事件循环 - 修复 Windows 关闭问题"""
     policy = asyncio.get_event_loop_policy()
     loop = policy.new_event_loop()
@@ -53,6 +78,53 @@ def event_loop():
         loop.close()
 
 
+@pytest.fixture(scope="session")
+async def redis_client():
+    """Redis 客户端 fixture"""
+    client = redis.from_url(TEST_REDIS_URL, decode_responses=True, max_connections=10)
+    try:
+        await client.ping()
+        await client.flushdb()  # 清空测试数据库
+        yield client
+    finally:
+        await client.close()
+
+@pytest.fixture(autouse=True)
+async def clean_redis(redis_client):
+    """每个测试后自动清理 Redis"""
+    yield
+    await redis_client.flushdb()
+
+
+@pytest.fixture(scope="function")
+async def memory_storage():
+    """内存存储 fixture"""
+    from neotask.storage.memory import MemoryTaskRepository, MemoryQueueRepository
+    return MemoryTaskRepository(), MemoryQueueRepository()
+
+
+@pytest.fixture(scope="function")
+async def sqlite_storage(tmp_path):
+    """SQLite 存储 fixture"""
+    from neotask.storage.sqlite import SQLiteTaskRepository, SQLiteQueueRepository
+    db_path = tmp_path / "test.db"
+    return SQLiteTaskRepository(str(db_path)), SQLiteQueueRepository(str(db_path))
+
+
+@pytest.fixture(scope="function")
+async def task_pool():
+    """TaskPool fixture"""
+    from neotask.api.task_pool import TaskPool
+
+    async def noop(data):
+        return {"result": "done"}
+
+    pool = TaskPool(executor=noop)
+    pool.start()
+    yield pool
+    pool.shutdown()
+
+
 @pytest.fixture(autouse=True)
 def close_loop_after_test():
     """确保每个测试后正确关闭事件循环"""
@@ -62,24 +134,6 @@ def close_loop_after_test():
     if loop.is_running():
         # 如果循环正在运行，不要立即关闭
         pass
-
-
-@pytest.fixture(scope="session")
-async def redis_client():
-    """Redis 客户端 fixture"""
-    # 为每个测试创建新连接
-    client = redis.from_url(TEST_REDIS_URL, decode_responses=True, max_connections=10)
-    yield client
-    # 清理测试数据
-    await client.flushdb()
-    await client.close()
-
-
-@pytest.fixture(autouse=True)
-async def clean_redis(redis_client):
-    """每个测试后自动清理 Redis"""
-    yield
-    await redis_client.flushdb()
 
 
 @pytest.fixture
