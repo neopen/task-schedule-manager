@@ -71,6 +71,8 @@ class EventBus:
                 else:
                     func(event)
 
+            # 保存原始函数引用，用于 unsubscribe
+            wrapper.__wrapped__ = func
             if event_type not in self._handlers:
                 self._handlers[event_type] = []
             self._handlers[event_type].append(wrapper)
@@ -129,7 +131,7 @@ class EventBus:
             original_count = len(self._handlers[event_type])
             self._handlers[event_type] = [
                 h for h in self._handlers[event_type]
-                if h != handler
+                if h != handler and getattr(h, '__wrapped__', None) != handler
             ]
             return len(self._handlers[event_type]) < original_count
         return False
@@ -238,3 +240,12 @@ class EventBus:
         if event_type:
             return len(self._handlers.get(event_type, []))
         return len(self._global_handlers)
+
+    async def __aenter__(self) -> "EventBus":
+        """异步上下文管理器进入"""
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        """异步上下文管理器退出"""
+        await self.stop()
