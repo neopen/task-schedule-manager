@@ -65,7 +65,7 @@ class PeriodicTaskDefinition:
     description: str = ""
 
     # 调度配置
-    interval_seconds: Optional[int] = None  # 固定间隔
+    interval_seconds: Optional[float] = None  # 固定间隔
     cron_expr: Optional[str] = None  # Cron表达式
     cron_obj: Optional[CronExpression] = None  # 解析后的Cron对象
 

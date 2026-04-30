@@ -476,7 +476,7 @@ class TaskScheduler:
         if self._periodic_manager:
             return self._run_async(
                 self._periodic_manager.create_interval(
-                    interval_seconds=int(interval_seconds),
+                    interval_seconds=interval_seconds,
                     task_data=data,
                     name=name or task_id,
                     priority=priority_value,
@@ -513,7 +513,8 @@ class TaskScheduler:
             max_runs: Optional[int] = None,
             name: str = ""
     ) -> str:
-        """按Cron表达式周期执行任务
+        """
+        按Cron表达式周期执行任务
 
         Args:
             data: 任务数据
