@@ -18,23 +18,23 @@ async def event_task(data: dict) -> dict:
 
 # 事件处理函数（必须是 async）
 async def on_created(event):
-    print(f"📝 任务创建: {event.task_id}")
+    print(f" 任务创建: {event.task_id}")
 
 
 async def on_started(event):
-    print(f"▶️  任务开始: {event.task_id}")
+    print(f"  任务开始: {event.task_id}")
 
 
 async def on_completed(event):
-    print(f"✅ 任务完成: {event.task_id}, 结果: {event.data}")
+    print(f" 任务完成: {event.task_id}, 结果: {event.data}")
 
 
 async def on_failed(event):
-    print(f"❌ 任务失败: {event.task_id}, 错误: {event.data}")
+    print(f" 任务失败: {event.task_id}, 错误: {event.data}")
 
 
 async def on_cancelled(event):
-    print(f"⏹️  任务取消: {event.task_id}")
+    print(f"  任务取消: {event.task_id}")
 
 
 async def main():
@@ -62,7 +62,7 @@ async def main():
 
         # 等待所有任务完成
         for task_id in task_ids:
-            result = await pool.wait_for_result_async(task_id)
+            result = pool.wait_for_result(task_id)
             print(f"  结果: {result}")
 
         print("\n所有任务完成")

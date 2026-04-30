@@ -33,12 +33,12 @@ async def long_task(data: dict) -> dict:
     return {"status": "completed", "id": data["id"]}
 
 
-async def test_retry():
+async def retry_task():
     """测试重试机制"""
     global retry_counter
     retry_counter = {"count": 0}
 
-    print("\n=== 重试机制演示 ===")
+    print("\n======= 重试机制演示 =======")
 
     pool = TaskPool(
         executor=flaky_task,
@@ -62,9 +62,9 @@ async def test_retry():
         pool.shutdown()
 
 
-async def test_cancel():
+async def cancel_task():
     """测试取消任务"""
-    print("\n=== 取消任务演示 ===")
+    print("\n======= 取消任务演示 =======")
 
     pool = TaskPool(executor=long_task)
 
@@ -86,9 +86,9 @@ async def test_cancel():
         pool.shutdown()
 
 
-async def test_batch_cancel():
+async def batch_cancel_task():
     """测试批量取消"""
-    print("\n=== 批量取消演示 ===")
+    print("\n======= 批量取消演示 =======")
 
     pool = TaskPool(executor=long_task)
 
@@ -117,9 +117,9 @@ async def test_batch_cancel():
 
 
 async def main():
-    await test_retry()
-    await test_cancel()
-    await test_batch_cancel()
+    await retry_task()
+    await cancel_task()
+    await batch_cancel_task()
 
 
 if __name__ == "__main__":

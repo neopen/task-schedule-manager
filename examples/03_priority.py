@@ -64,7 +64,7 @@ def main():
             except Exception as e:
                 print(f"  任务 {task_id} 失败: {e}")
 
-        print("\n预期执行顺序: 紧急任务 → 高优先级 → 普通任务 → 低优先级")
+        print("\n预期执行顺序: 紧急任务[CRITICAL] → 高优先级[HIGH] → 普通任务[NORMAL] → 低优先级[LOW]")
         print("实际执行顺序请观察上面的输出")
 
         stats = pool.get_stats()

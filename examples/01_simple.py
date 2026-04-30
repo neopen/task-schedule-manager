@@ -29,7 +29,7 @@ async def main():
             print(f"已提交: {task_id}")
 
         for task_id in tasks:
-            result = await pool.wait_for_result_async(task_id)
+            result = pool.wait_for_result(task_id)
             print(f"任务 {task_id} 结果: {result}")
     # 退出上下文时自动调用 shutdown()
 
