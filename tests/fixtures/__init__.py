@@ -5,16 +5,24 @@
 @Time: 2026/4/29
 """
 
-from tests.fixtures.event_loop import *
-from tests.fixtures.redis import *
-from tests.fixtures.storage import *
-from tests.fixtures.queue import *
-from tests.fixtures.task import *
-from tests.fixtures.executor import *
-from tests.fixtures.event import *
-from tests.fixtures.monitor import *
-from tests.fixtures.distributed import *
-from tests.fixtures.helpers import *
+import sys
+from pathlib import Path
+
+# 添加项目根目录到路径
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
+# 使用相对导入
+from .event_loop import *
+from .redis import *
+from .storage import *
+from .queue import *
+from .task import *
+from .executor import *
+from .event import *
+from .monitor import *
+from .distributed import *
+from .helpers import *
 
 __all__ = [
     # event_loop
