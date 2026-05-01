@@ -15,7 +15,7 @@ async def my_task(data: dict) -> dict:
     task_name = data['name']
     # 使用锁避免 print 交错
     with print_lock:
-        print(f"  ▶ 执行任务: {task_name}")
+        print(f"  执行任务: {task_name}")
     await asyncio.sleep(0.2)
     return {"status": "done", "name": task_name}
 
@@ -38,14 +38,14 @@ def main():
         for i in range(5):
             task_id = pool.submit({"name": f"task_{i}"})
             task_ids.append(task_id)
-            print(f"  ✓ 已提交: {task_id}")
+            print(f"   已提交: {task_id}")
 
         print("\n等待任务完成...\n")
 
         # 等待结果
         for task_id in task_ids:
             result = pool.wait_for_result(task_id)
-            print(f"  📦 结果 [{task_id[:8]}...]: {result['status']}")
+            print(f"   结果 [{task_id[:8]}...]: {result['status']}")
 
     print("\n 任务池已自动关闭")
 

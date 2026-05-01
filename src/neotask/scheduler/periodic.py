@@ -116,7 +116,7 @@ class PeriodicTaskManager:
 
     async def create_interval(
             self,
-            interval_seconds: int,
+            interval_seconds: float,
             task_data: Dict[str, Any],
             name: str = "",
             description: str = "",

@@ -8,6 +8,8 @@
 from dataclasses import dataclass, field
 from typing import Optional, Literal
 
+from neotask.executor import ExecutorType
+
 
 @dataclass
 class StorageConfig:
@@ -135,6 +137,17 @@ class ExecutorConfig:
 
 
 @dataclass
+class DistributedConfig:
+    """分布式配置"""
+    node_id: str = ""
+    redis_url: Optional[str] = None
+    enable_heartbeat: bool = True
+    heartbeat_interval: int = 5
+    enable_election: bool = False
+    shard_count: int = 1
+
+
+@dataclass
 class TaskPoolConfig:
     """TaskPool配置 - 专注于即时任务"""
 
@@ -144,7 +157,7 @@ class TaskPoolConfig:
     redis_url: Optional[str] = None
 
     # 执行器配置
-    executor_type: str = "async"
+    executor_type: ExecutorType = ExecutorType.ASYNC
     max_workers: int = 10
 
     # Worker配置

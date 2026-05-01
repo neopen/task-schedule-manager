@@ -26,7 +26,7 @@ async def main():
         print("=== 延时任务示例 ===\n")
 
         # 1. 延时执行（3秒后）
-        print("1. 延时 3 秒执行:")
+        print("1. 延时 3 秒执行【延时通知】:")
         task_id = await scheduler.submit_delayed_async(
             {"message": "3秒后发送的通知"},
             delay_seconds=3
@@ -35,7 +35,7 @@ async def main():
 
         # 2. 指定时间点执行
         execute_at = datetime.now() + timedelta(seconds=5)
-        print(f"\n2. 指定时间点执行: {execute_at.strftime('%H:%M:%S')}")
+        print(f"\n2. 指定时间点执行【定点通知】: {execute_at.strftime('%H:%M:%S')}")
         task_id = await scheduler.submit_at_async(
             {"message": "定时发送的通知"},
             execute_at=execute_at
@@ -43,7 +43,7 @@ async def main():
         print(f"   任务ID: {task_id}")
 
         # 3. 周期执行（每2秒）
-        print("\n3. 周期执行（每2秒）:")
+        print("\n3. 周期执行（每2秒）【心跳通知】:")
         task_id = scheduler.submit_interval(
             {"message": "心跳通知"},
             interval_seconds=2,
