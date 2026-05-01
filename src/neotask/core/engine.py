@@ -6,23 +6,21 @@
 """
 
 import asyncio
-from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
+from typing import Optional, Dict, Any, List
 
-from neotask.core.lifecycle import TaskLifecycleManager
+from neotask.common.logger import info
 from neotask.core.dispatcher import TaskDispatcher
-from neotask.core.context import TaskContext
+from neotask.core.lifecycle import TaskLifecycleManager
+from neotask.event.bus import EventBus
+from neotask.executor.base import TaskExecutor
+from neotask.executor.factory import ExecutorFactory, ExecutorType
+from neotask.monitor.metrics import MetricsCollector
+from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.storage.base import TaskRepository, QueueRepository
 from neotask.storage.factory import StorageFactory
-from neotask.executor.factory import ExecutorFactory, ExecutorType
-from neotask.executor.base import TaskExecutor
-from neotask.queue.queue_scheduler import QueueScheduler
 from neotask.worker.pool import WorkerPool
 from neotask.worker.supervisor import WorkerSupervisor
-from neotask.event.bus import EventBus
-from neotask.lock.factory import LockFactory
-from neotask.monitor.metrics import MetricsCollector
-from neotask.common.exceptions import TaskError
 
 
 @dataclass
@@ -41,6 +39,7 @@ class EngineConfig:
     # Worker配置
     worker_concurrency: int = 10
     prefetch_size: int = 20
+    task_timeout: int = 300
 
     # 队列配置
     queue_max_size: int = 10000
@@ -135,24 +134,26 @@ class TaskEngine:
             event_bus=self._event_bus,
             lifecycle_manager=self._lifecycle_manager,
             concurrency=self.config.worker_concurrency,
-            prefetch_size=self.config.prefetch_size
+            prefetch_size=self.config.prefetch_size,
+            task_timeout=self.config.task_timeout
         )
 
-        # 8. 初始化Worker监督者
+        # 8. 初始化Worker监督者（修复：WorkerSupervisor 只需要 worker_pool）
         self._worker_supervisor = WorkerSupervisor(
-            worker_pool=self._worker_pool,
-            health_check_interval=30
+            worker_pool=self._worker_pool
         )
 
-        # 9. 初始化监控
+        # 9. 初始化监控（修复：MetricsCollector 构造函数签名不同）
         if self.config.enable_metrics:
+            # MetricsCollector 参数: window_size, enable_system_metrics, system_metrics_interval
             self._metrics = MetricsCollector(
-                task_repo=self._task_repo,
-                queue_scheduler=self._queue_scheduler,
-                interval=self.config.metrics_interval
+                window_size=self.config.metrics_interval * 10,
+                enable_system_metrics=True,
+                system_metrics_interval=self.config.metrics_interval
             )
 
         self._initialized = True
+        info("TaskEngine initialized successfully")
 
     async def _init_storage(self) -> None:
         """初始化存储"""
@@ -175,6 +176,7 @@ class TaskEngine:
             # 默认执行器
             async def default_executor(data):
                 return {"result": "executed", "data": data}
+
             self.config.executor_func = default_executor
 
         self._executor = ExecutorFactory.create(
@@ -193,6 +195,12 @@ class TaskEngine:
 
         self._running = True
 
+        # 启动事件总线
+        await self._event_bus.start()
+
+        # 启动队列调度器
+        await self._queue_scheduler.start()
+
         # 启动Worker池
         await self._worker_pool.start()
 
@@ -203,29 +211,30 @@ class TaskEngine:
         if self._metrics:
             await self._metrics.start()
 
-        # 启动事件总线
-        await self._event_bus.start()
+        info("TaskEngine started successfully")
 
-    async def stop(self, graceful: bool = True) -> None:
+    async def stop(self, graceful: bool = True, timeout: float = 30) -> None:
         """停止引擎
 
         Args:
             graceful: 是否优雅停止（等待当前任务完成）
+            timeout: 优雅停止超时时间
         """
         if not self._running:
             return
 
         self._running = False
+        info("Stopping TaskEngine...")
 
         # 停止接收新任务
         await self._queue_scheduler.disable()
 
         if graceful:
             # 等待队列清空
-            await self._queue_scheduler.wait_until_empty(timeout=300)
+            await self._queue_scheduler.wait_until_empty(timeout=timeout)
 
         # 停止Worker池
-        await self._worker_pool.stop(graceful=graceful)
+        await self._worker_pool.stop(graceful=graceful, timeout=timeout)
 
         # 停止监督者
         await self._worker_supervisor.stop()
@@ -248,15 +257,17 @@ class TaskEngine:
             if not task.done():
                 task.cancel()
 
+        info("TaskEngine stopped successfully")
+
     # ========== 任务操作 API ==========
 
     async def submit(
-        self,
-        data: Dict[str, Any],
-        task_id: Optional[str] = None,
-        priority: int = 5,
-        delay: float = 0,
-        ttl: int = 3600
+            self,
+            data: Dict[str, Any],
+            task_id: Optional[str] = None,
+            priority: int = 5,
+            delay: float = 0,
+            ttl: int = 3600
     ) -> str:
         """提交任务
 
@@ -300,25 +311,24 @@ class TaskEngine:
         # 尝试从队列移除
         removed = await self._queue_scheduler.remove(task_id)
         if removed:
-            return await self._lifecycle_manager.cancel(task_id)
+            return await self._lifecycle_manager.cancel_task(task_id)
 
         # 尝试取消正在执行的任务
         return await self._worker_pool.cancel_task(task_id)
 
-    async def wait(
-        self,
-        task_id: str,
-        timeout: float = 300
-    ) -> Any:
-        """等待任务完成并返回结果"""
-        return await self._lifecycle_manager.wait(task_id, timeout)
+    async def wait(self, task_id: str, timeout: float = 300) -> Any:
+        """等待任务完成并返回结果
+
+        使用 lifecycle_manager 的 wait_for_task 方法
+        """
+        return await self._lifecycle_manager.wait_for_task(task_id, timeout)
 
     # ========== 批量操作 API ==========
 
     async def submit_batch(
-        self,
-        tasks: List[Dict[str, Any]],
-        priority: int = 5
+            self,
+            tasks: List[Dict[str, Any]],
+            priority: int = 5
     ) -> List[str]:
         """批量提交任务"""
         task_ids = []
@@ -328,9 +338,9 @@ class TaskEngine:
         return task_ids
 
     async def wait_all(
-        self,
-        task_ids: List[str],
-        timeout: float = 300
+            self,
+            task_ids: List[str],
+            timeout: float = 300
     ) -> Dict[str, Any]:
         """等待所有任务完成"""
         results = {}
@@ -353,7 +363,7 @@ class TaskEngine:
         }
 
         if self._metrics:
-            stats["metrics"] = self._metrics.get_summary()
+            stats["metrics"] = await self._metrics.get_summary_async()
 
         return stats
 
