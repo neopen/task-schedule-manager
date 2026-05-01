@@ -1,12 +1,13 @@
-
 """
 NeoTask 0.4 版本核心功能验证脚本
 """
+import asyncio
 import sys
 import time
-import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any
+
+from neotask.models.task import TaskPriority
 
 # 添加 src 目录到路径
 sys.path.insert(0, '../src')
@@ -213,23 +214,23 @@ async def verify_cron_parser():
         from neotask.scheduler.cron_parser import CronParser
 
         # 测试解析
-        parser = CronParser("0 9 * * *")  # 每天9点
-        next_run = parser.get_next_run_time(datetime.now())
+        parser = CronParser.parse("0 9 * * *")  # 每天9点
+        next_run = parser.next(datetime.now())
         assert next_run is not None, "应该能计算下次运行时间"
         report_success("CronParser解析", "正常")
 
         # 测试不同表达式
         test_expressions = [
             "*/5 * * * *",  # 每5分钟
-            "0 * * * *",    # 每小时
-            "0 0 * * 1",    # 每周一
-            "0 0 1 * *",    # 每月1号
+            "0 * * * *",  # 每小时
+            "0 0 * * 1",  # 每周一
+            "0 0 1 * *",  # 每月1号
         ]
 
         for expr in test_expressions:
             try:
-                p = CronParser(expr)
-                nr = p.get_next_run_time(datetime.now())
+                p = CronParser.parse(expr)
+                nr = p.next(datetime.now())
                 assert nr is not None, f"{expr} 应该能解析"
             except Exception:
                 report_issue("CronParser", f"表达式解析失败: {expr}", "medium")
@@ -262,7 +263,7 @@ async def verify_task_pool_simple():
         report_success("TaskPool配置", "配置正常")
 
         # 验证生命周期管理器存在
-        assert hasattr(pool, '_lifecycle_manager'), "缺少_lifecycle_manager"
+        assert hasattr(pool, '_lifecycle'), "缺少_lifecycle_manager"
         assert hasattr(pool, '_queue_scheduler'), "缺少_queue_scheduler"
         assert hasattr(pool, '_worker_pool'), "缺少_worker_pool"
         report_success("TaskPool组件", "核心组件都存在")
@@ -285,7 +286,7 @@ async def verify_task_scheduler_simple():
         report_success("TaskScheduler创建", "实例化正常")
 
         # 验证核心组件
-        assert hasattr(scheduler, '_task_pool'), "缺少_task_pool"
+        assert hasattr(scheduler, '_pool'), "缺少_task_pool"
         assert hasattr(scheduler, '_periodic_manager'), "缺少_periodic_manager"
         assert hasattr(scheduler, '_time_wheel'), "缺少_time_wheel"
         report_success("TaskScheduler组件", "核心组件都存在")
@@ -354,7 +355,7 @@ async def verify_storage():
 
         # 测试 Memory 存储
         repo = MemoryTaskRepository()
-        task = Task(task_id="storage-test-001", data={"x": 1}, priority=2)
+        task = Task(task_id="storage-test-001", data={"x": 1}, priority=TaskPriority.NORMAL)
 
         # 保存
         await repo.save(task)
@@ -406,6 +407,7 @@ async def verify_future_manager():
 
         # 测试等待
         fm2 = FutureManager()
+
         async def complete_later():
             await asyncio.sleep(0.1)
             await fm2.complete("future-test-002", result={"delayed": True})
@@ -418,6 +420,7 @@ async def verify_future_manager():
 
         # 测试异常
         fm3 = FutureManager()
+
         async def fail_later():
             await asyncio.sleep(0.1)
             await fm3.complete("future-test-003", error="something wrong")
@@ -518,4 +521,3 @@ if __name__ == "__main__":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
     found_issues = asyncio.run(main())
-

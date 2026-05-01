@@ -87,6 +87,11 @@ class FutureManager:
             else:
                 debug(f"[FutureManager] No future found for task {task_id}")
 
+    async def wait(self, task_id: str, timeout: float = 300) -> Any:
+        """Wait for a future."""
+        future = await self.get(task_id)
+        return await future.wait(timeout)
+
     async def remove(self, task_id: str) -> None:
         """Remove a future."""
         async with self._lock:
